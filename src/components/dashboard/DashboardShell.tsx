@@ -10,6 +10,7 @@ import ManagerCostTab from "@/components/dashboard/tabs/ManagerCostTab";
 import AnalyticsTab from "@/components/dashboard/tabs/AnalyticsTab";
 import ReportsTab from "@/components/dashboard/tabs/ReportsTab";
 import SkusTab from "@/components/dashboard/tabs/SkusTab";
+import BulkUploadTab from "@/components/dashboard/tabs/BulkUploadTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import { formatMoney } from "@/lib/format";
 
@@ -17,6 +18,7 @@ const TABS = [
   { key: "sale", label: "Sale Entry" },
   { key: "collection", label: "Collection Entry" },
   { key: "cost", label: "Manager Cost" },
+  { key: "bulk", label: "Bulk Upload" },
   { key: "analytics", label: "Analytics" },
   { key: "reports", label: "Day-wise Reports" },
   { key: "download", label: "Download Reports" },
@@ -125,6 +127,7 @@ export default function DashboardShell({ managerName }: { managerName: string })
         {tab === "sale" && <SaleEntryTab onSaved={bumpRefresh} />}
         {tab === "collection" && <CollectionEntryTab onSaved={bumpRefresh} />}
         {tab === "cost" && <ManagerCostTab onSaved={bumpRefresh} />}
+        {tab === "bulk" && <BulkUploadTab onSaved={bumpRefresh} />}
         {tab === "analytics" && <AnalyticsTab key={refreshToken} />}
         {tab === "reports" && <ReportsTab />}
         {tab === "download" && <DownloadReportsPanel />}
