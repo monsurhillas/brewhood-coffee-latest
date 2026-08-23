@@ -49,6 +49,50 @@ export async function GET() {
     LIMIT 10
   `;
 
+  // Daily trend: sales vs collections vs costs over time, last 120 days.
+  const dailyTrend = await db`
+    WITH days AS (
+      SELECT date_trunc('day', created_at) AS day, total AS amt, 'sales' AS kind FROM sales
+      UNION ALL
+      SELECT date_trunc('day', created_at) AS day,
+             CASE WHEN is_contra THEN -amount ELSE amount END AS amt, 'collections' AS kind
+      FROM collections
+      UNION ALL
+      SELECT date_trunc('day', created_at) AS day, amount AS amt, 'costs' AS kind FROM manager_costs
+    )
+    SELECT
+      day,
+      COALESCE(SUM(amt) FILTER (WHERE kind = 'sales'), 0)::float8 AS sales,
+      COALESCE(SUM(amt) FILTER (WHERE kind = 'collections'), 0)::float8 AS collections,
+      COALESCE(SUM(amt) FILTER (WHERE kind = 'costs'), 0)::float8 AS costs
+    FROM days
+    WHERE day >= (CURRENT_DATE - INTERVAL '120 days')
+    GROUP BY day
+    ORDER BY day ASC
+  `;
+
+  // Weekday seasonality: which day of the week sells the most (0 = Sunday).
+  const weekdaySeasonality = await db`
+    SELECT
+      EXTRACT(DOW FROM created_at)::int AS weekday,
+      SUM(total)::float8 AS sales,
+      COUNT(*)::int AS tx_count
+    FROM sales
+    GROUP BY weekday
+    ORDER BY weekday
+  `;
+
+  // Hour-of-day pattern: when during the day sales happen most.
+  const hourlyPattern = await db`
+    SELECT
+      EXTRACT(HOUR FROM created_at)::int AS hour,
+      SUM(total)::float8 AS sales,
+      COUNT(*)::int AS tx_count
+    FROM sales
+    GROUP BY hour
+    ORDER BY hour
+  `;
+
   const employeeActivity = await db`
     SELECT
       e.id, e.employee_id, e.name,
@@ -76,5 +120,8 @@ export async function GET() {
     costBreakdown,
     topProducts,
     employeeActivity,
+    dailyTrend,
+    weekdaySeasonality,
+    hourlyPattern,
   });
 }
