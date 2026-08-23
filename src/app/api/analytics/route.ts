@@ -21,17 +21,33 @@ export async function GET() {
       (SELECT COUNT(*) FROM employees WHERE active)::int AS active_employee_count,
       (SELECT COUNT(*) FROM sales)::int AS sale_count,
       (
-        SELECT COALESCE(SUM(
-          COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))
-        ), 0)
-        FROM employees e
-        LEFT JOIN (SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id) s
-          ON s.employee_id = e.id
-        LEFT JOIN (
-          SELECT employee_id, SUM(CASE WHEN is_contra THEN -amount ELSE amount END) AS total_collected
-          FROM collections GROUP BY employee_id
-        ) c ON c.employee_id = e.id
-      )::float8 AS outstanding_net
+        SELECT COALESCE(SUM(GREATEST(bal, 0)), 0)
+        FROM (
+          SELECT
+            COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0)) AS bal
+          FROM employees e
+          LEFT JOIN (SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id) s
+            ON s.employee_id = e.id
+          LEFT JOIN (
+            SELECT employee_id, SUM(CASE WHEN is_contra THEN -amount ELSE amount END) AS total_collected
+            FROM collections GROUP BY employee_id
+          ) c ON c.employee_id = e.id
+        ) x
+      )::float8 AS outstanding_net,
+      (
+        SELECT COALESCE(SUM(GREATEST(-bal, 0)), 0)
+        FROM (
+          SELECT
+            COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0)) AS bal
+          FROM employees e
+          LEFT JOIN (SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id) s
+            ON s.employee_id = e.id
+          LEFT JOIN (
+            SELECT employee_id, SUM(CASE WHEN is_contra THEN -amount ELSE amount END) AS total_collected
+            FROM collections GROUP BY employee_id
+          ) c ON c.employee_id = e.id
+        ) x
+      )::float8 AS advance_net
   `;
 
   const costBreakdown = await db`
@@ -116,6 +132,7 @@ export async function GET() {
       ...totals,
       net: totals.total_sales - totals.total_costs,
       outstanding: totals.outstanding_net,
+      advance: totals.advance_net,
     },
     costBreakdown,
     topProducts,
