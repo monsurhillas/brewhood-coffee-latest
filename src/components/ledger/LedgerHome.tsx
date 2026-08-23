@@ -158,10 +158,10 @@ export default function LedgerHome() {
                     className={`text-sm font-semibold ${
                       e.balance > 0 ? "text-amber-600" : e.balance < 0 ? "text-red-500" : "text-emerald-600"
                     }`}
-                >
-                  {formatMoney(e.balance)}
-                </span>
-              </div>
+                  >
+                    {formatMoney(e.balance)}
+                  </span>
+                </div>
               </button>
             ))}
           </div>
