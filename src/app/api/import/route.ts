@@ -50,6 +50,28 @@ export async function POST(request: NextRequest) {
   const costsCsv = await readField("costs");
   const transactionsCsv = await readField("transactions");
 
+  // Optional: a JSON map of employee_id -> authoritative current balance,
+  // read live from the original BrewHood Ledger system. The old system's
+  // own displayed balance sometimes reflects manual settlements/adjustments
+  // that never show up as a "sale" or "collection" row in the CSV export,
+  // so when this is supplied it overrides the sales-minus-collections
+  // calculation for that employee rather than trusting the transaction log
+  // alone. The original system's convention is negative = employee owes the
+  // shop; this app's convention is positive = employee owes the shop, so the
+  // sign is flipped on the way in.
+  const liveBalancesRaw = await readField("liveBalances");
+  let liveBalances: Record<string, number> = {};
+  if (liveBalancesRaw) {
+    try {
+      const parsed = JSON.parse(liveBalancesRaw);
+      if (parsed && typeof parsed === "object") {
+        liveBalances = parsed;
+      }
+    } catch {
+      // ignore malformed input; balances simply won't be overridden
+    }
+  }
+
   // ---------- Parse employees ----------
   const employeeRows: { employee_id: string; name: string }[] = [];
   const empIdSet = new Set<string>();
@@ -146,6 +168,10 @@ export async function POST(request: NextRequest) {
     "TRUNCATE TABLE sales, collections, manager_costs, skus, employees RESTART IDENTITY CASCADE"
   );
 
+  await db.query(
+    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS balance_override NUMERIC(12,2)"
+  );
+
   const empIdMap = new Map<string, number>();
   if (employeeRows.length) {
     const ids = employeeRows.map((e) => e.employee_id);
@@ -157,6 +183,27 @@ export async function POST(request: NextRequest) {
       [ids, names]
     )) as { id: number; employee_id: string }[];
     for (const row of inserted) empIdMap.set(row.employee_id, row.id);
+  }
+
+  let balanceOverridesApplied = 0;
+  const overrideEmpIds = Object.keys(liveBalances).filter((id) => empIdMap.has(id));
+  if (overrideEmpIds.length) {
+    const internalIds = overrideEmpIds.map((id) => empIdMap.get(id)!);
+    // Flip sign: original system uses negative = employee owes the shop,
+    // this app uses positive = employee owes the shop.
+    const overrides = overrideEmpIds.map((id) => {
+      const v = Number(liveBalances[id]) || 0;
+      // Round away the old system's float noise (e.g. 1.42e-14) to the cent.
+      return Math.round(-v * 100) / 100;
+    });
+    await db.query(
+      `UPDATE employees e
+       SET balance_override = v.balance
+       FROM (SELECT * FROM unnest($1::int[], $2::numeric[]) AS t(id, balance)) v
+       WHERE e.id = v.id`,
+      [internalIds, overrides]
+    );
+    balanceOverridesApplied = overrideEmpIds.length;
   }
 
   const skuIdMap = new Map<string, number>();
@@ -254,5 +301,6 @@ export async function POST(request: NextRequest) {
     costs: costRows.length,
     sales: { inserted: salesInserted, skipped: salesSkipped },
     collections: { inserted: collInserted, skipped: collSkipped },
+    balanceOverridesApplied,
   });
 }
