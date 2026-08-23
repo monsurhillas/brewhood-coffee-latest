@@ -5,13 +5,6 @@ import { parseCsv } from "@/lib/csv";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type ImportBody = {
-  employeesCsv?: string;
-  skusCsv?: string;
-  costsCsv?: string;
-  transactionsCsv?: string;
-};
-
 function buildIndex(header: string[]): Record<string, number> {
   const idx: Record<string, number> = {};
   header.forEach((h, i) => {
@@ -40,11 +33,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or missing key." }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as ImportBody | null;
-  if (!body) {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  // Accepts multipart/form-data with file fields "employees", "skus",
+  // "costs", "transactions" (each the raw CSV export from the old system).
+  const form = await request.formData().catch(() => null);
+  if (!form) {
+    return NextResponse.json({ error: "Expected multipart/form-data body." }, { status: 400 });
   }
-  const { employeesCsv, skusCsv, costsCsv, transactionsCsv } = body;
+  const readField = async (name: string): Promise<string | undefined> => {
+    const value = form.get(name);
+    if (value === null) return undefined;
+    if (typeof value === "string") return value;
+    return await value.text();
+  };
+  const employeesCsv = await readField("employees");
+  const skusCsv = await readField("skus");
+  const costsCsv = await readField("costs");
+  const transactionsCsv = await readField("transactions");
 
   // ---------- Parse employees ----------
   const employeeRows: { employee_id: string; name: string }[] = [];
