@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       e.id, e.employee_id, e.name, e.phone, e.role, e.active, e.created_at,
       COALESCE(s.total_sales, 0)::float8 AS total_sales,
       COALESCE(c.total_collected, 0)::float8 AS total_collected,
-      (COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance,
+      COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance,
       GREATEST(s.last_sale_at, c.last_activity_at) AS last_activity_at
     FROM employees e
     LEFT JOIN (
