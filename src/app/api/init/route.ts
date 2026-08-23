@@ -33,12 +33,19 @@ export async function POST(request: NextRequest) {
   let seededAdmin: { username: string; password: string } | null = null;
 
   if (existing.length === 0) {
-    const username = "admin";
-    const password = Math.random().toString(36).slice(-10) + "A1!";
+    // Allow the caller to specify the initial admin's username/password via
+    // the request body; fall back to a random default if not provided.
+    const body = await request.json().catch(() => ({} as Record<string, unknown>));
+    const username =
+      typeof body.username === "string" && body.username.trim() ? body.username.trim() : "admin";
+    const password =
+      typeof body.password === "string" && body.password.length >= 6
+        ? body.password
+        : Math.random().toString(36).slice(-10) + "A1!";
     const passwordHash = await bcrypt.hash(password, 10);
     await db`
       INSERT INTO manager_users (username, password_hash, name)
-      VALUES (${username}, ${passwordHash}, 'Admin')
+      VALUES (${username.toLowerCase()}, ${passwordHash}, 'Admin')
     `;
     seededAdmin = { username, password };
   }
