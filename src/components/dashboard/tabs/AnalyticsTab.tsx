@@ -29,6 +29,7 @@ type Analytics = {
     sale_count: number;
     net: number;
     outstanding: number;
+    advance: number;
   };
   costBreakdown: { category: string; total: number }[];
   topProducts: { sku_name: string; units_sold: number; revenue: number }[];
@@ -86,6 +87,7 @@ export default function AnalyticsTab() {
         <StatCard label="Manager Costs" value={formatMoney(totals.total_costs)} />
         <StatCard label="Net" value={formatMoney(totals.net)} highlight />
         <StatCard label="Outstanding" value={formatMoney(totals.outstanding)} />
+        <StatCard label="Advance Balance" value={formatMoney(totals.advance)} />
         <StatCard label="Employees" value={`${totals.active_employee_count}/${totals.employee_count} active`} />
         <StatCard label="Sale Entries" value={String(totals.sale_count)} />
       </div>
