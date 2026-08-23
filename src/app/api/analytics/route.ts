@@ -19,7 +19,19 @@ export async function GET() {
       (SELECT COALESCE(SUM(amount), 0) FROM manager_costs)::float8 AS total_costs,
       (SELECT COUNT(*) FROM employees)::int AS employee_count,
       (SELECT COUNT(*) FROM employees WHERE active)::int AS active_employee_count,
-      (SELECT COUNT(*) FROM sales)::int AS sale_count
+      (SELECT COUNT(*) FROM sales)::int AS sale_count,
+      (
+        SELECT COALESCE(SUM(
+          COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))
+        ), 0)
+        FROM employees e
+        LEFT JOIN (SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id) s
+          ON s.employee_id = e.id
+        LEFT JOIN (
+          SELECT employee_id, SUM(CASE WHEN is_contra THEN -amount ELSE amount END) AS total_collected
+          FROM collections GROUP BY employee_id
+        ) c ON c.employee_id = e.id
+      )::float8 AS outstanding_net
   `;
 
   const costBreakdown = await db`
@@ -42,7 +54,7 @@ export async function GET() {
       e.id, e.employee_id, e.name,
       COALESCE(s.total_sales, 0)::float8 AS total_sales,
       COALESCE(c.total_collected, 0)::float8 AS total_collected,
-      (COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance
+      COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance
     FROM employees e
     LEFT JOIN (
       SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id
@@ -58,8 +70,8 @@ export async function GET() {
   return NextResponse.json({
     totals: {
       ...totals,
-      net: totals.total_collected - totals.total_costs,
-      outstanding: totals.total_sales - totals.total_collected,
+      net: totals.total_sales - totals.total_costs,
+      outstanding: totals.outstanding_net,
     },
     costBreakdown,
     topProducts,
