@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   const employeeRows: { employee_id: string; name: string }[] = [];
   const empIdSet = new Set<string>();
   if (employeesCsv) {
- scsv);
+    const rows = parseCsv(employeesCsv);
     const idx = buildIndex(rows[0] ?? []);
     for (const r of rows.slice(1)) {
       const employee_id = col(idx, r, "Employee ID");
@@ -106,7 +106,14 @@ export async function POST(request: NextRequest) {
   const collRows: { employee_id: string; amount: number; is_contra: boolean; created_at: string }[] = [];
   const transactionEmpIds = new Set<string>();
   if (transactionsCsv) {
- sCsv, r, "Transaction Type");
+    const rows = parseCsv(transactionsCsv);
+    const idx = buildIndex(rows[0] ?? []);
+    for (const r of rows.slice(1)) {
+      const employee_id = col(idx, r, "Employee ID");
+      const createdAt = col(idx, r, "Timestamp");
+      if (!employee_id || !createdAt) continue;
+      transactionEmpIds.add(employee_id);
+      const type = col(idx, r, "Transaction Type");
       const amount = Number(col(idx, r, "Amount")) || 0;
       if (type === "sale") {
         const skuName = col(idx, r, "SKU Name") || "Item";
@@ -242,6 +249,6 @@ export async function POST(request: NextRequest) {
     skus: skuRows.length,
     costs: costRows.length,
     sales: { inserted: salesInserted, skipped: salesSkipped },
-    collections: { inserted: collInserted, skipped: collSkipped},
+    collections: { inserted: collInserted, skipped: collSkipped },
   });
 }
