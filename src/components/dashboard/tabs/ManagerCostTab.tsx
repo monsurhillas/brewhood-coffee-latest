@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type CostRow = { id: number; category: string; amount: number; note: string | null; created_at: string };
@@ -62,17 +63,11 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
 
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Category</label>
-          <select
+          <ThemedSelect
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setCategory}
+            options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+          />
         </div>
 
         <div>

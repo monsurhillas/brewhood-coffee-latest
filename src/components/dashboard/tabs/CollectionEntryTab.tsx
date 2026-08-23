@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import EmployeePicker, { EmployeeOption } from "@/components/dashboard/EmployeePicker";
+import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type CollectionRow = {
@@ -98,17 +99,11 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
 
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Method</label>
-          <select
+          <ThemedSelect
             value={method}
-            onChange={(e) => setMethod(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-          >
-            {METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m.toUpperCase()}
-              </option>
-            ))}
-          </select>
+            onChange={setMethod}
+            options={METHODS.map((m) => ({ value: m, label: m.toUpperCase() }))}
+          />
         </div>
 
         <label className="flex items-center gap-2 text-sm">

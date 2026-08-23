@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import EmployeePicker, { EmployeeOption } from "@/components/dashboard/EmployeePicker";
+import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type Sku = { id: number; name: string; price: string; active: boolean };
@@ -103,18 +104,18 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
 
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Item</label>
-          <select
+          <ThemedSelect
             value={skuId}
-            onChange={(e) => handleSkuChange(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-          >
-            <option value="">Custom item…</option>
-            {skus.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} — {formatMoney(Number(s.price))}
-              </option>
-            ))}
-          </select>
+            onChange={handleSkuChange}
+            placeholder="Custom item…"
+            options={[
+              { value: "", label: "Custom item…" },
+              ...skus.map((s) => ({
+                value: String(s.id),
+                label: `${s.name} — ${formatMoney(Number(s.price))}`,
+              })),
+            ]}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
