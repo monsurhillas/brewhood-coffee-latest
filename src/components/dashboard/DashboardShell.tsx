@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
@@ -10,6 +10,8 @@ import ManagerCostTab from "@/components/dashboard/tabs/ManagerCostTab";
 import AnalyticsTab from "@/components/dashboard/tabs/AnalyticsTab";
 import ReportsTab from "@/components/dashboard/tabs/ReportsTab";
 import SkusTab from "@/components/dashboard/tabs/SkusTab";
+import ThemeToggle from "@/components/ThemeToggle";
+import { formatMoney } from "@/lib/format";
 
 const TABS = [
   { key: "sale", label: "Sale Entry" },
@@ -23,16 +25,37 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+type Summary = {
+  outstanding: number;
+  advance: number;
+  employeeCount: number;
+  activeEmployeeCount: number;
+};
+
 export default function DashboardShell({ managerName }: { managerName: string }) {
   const [tab, setTab] = useState<TabKey>("sale");
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
   const bumpRefresh = () => setRefreshToken((v) => v + 1);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/summary")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setSummary(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
+
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)]">
-      <header className="border-b border-[var(--border)] bg-[var(--card)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--card)]">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brand)] text-white">☕</div>
@@ -66,7 +89,20 @@ export default function DashboardShell({ managerName }: { managerName: string })
             >
               Logout
             </button>
+            <ThemeToggle />
           </div>
+        </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap gap-3 px-6 pb-3">
+          <SummaryTile
+            label="Total Outstanding"
+            value={summary ? formatMoney(summary.outstanding) : "…"}
+            className="text-amber-600"
+          />
+          <SummaryTile
+            label="Total Advance Balance"
+            value={summary ? formatMoney(summary.advance) : "…"}
+            className="text-red-500"
+          />
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6 pb-2">
           {TABS.map((t) => (
@@ -98,6 +134,23 @@ export default function DashboardShell({ managerName }: { managerName: string })
       {addEmployeeOpen && (
         <AddEmployeeModal onClose={() => setAddEmployeeOpen(false)} onImported={bumpRefresh} />
       )}
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-1.5">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</p>
+      <p className={`text-sm font-semibold ${className ?? ""}`}>{value}</p>
     </div>
   );
 }
