@@ -13,8 +13,10 @@ export const SCHEMA_STATEMENTS = [
     phone TEXT,
     role TEXT,
     active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    balance_override NUMERIC(12,2)
   )`,
+  `ALTER TABLE employees ADD COLUMN IF NOT EXISTS balance_override NUMERIC(12,2)`,
   `CREATE TABLE IF NOT EXISTS skus (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
