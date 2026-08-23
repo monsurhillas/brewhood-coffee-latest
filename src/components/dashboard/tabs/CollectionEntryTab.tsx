@@ -26,7 +26,6 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [recent, setRecent] = useState<CollectionRow[]>([]);
-  const [editingEnabled, setEditingEnabled] = useState(false);
 
   useEffect(() => {
     loadRecent();
@@ -70,12 +69,6 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
       const data = await res.json().catch(() => ({}));
       setMessage(data.error ?? "Failed to save.");
     }
-  }
-
-  async function handleDelete(id: number) {
-    await fetch(`/api/collections/${id}`, { method: "DELETE" });
-    loadRecent();
-    onSaved();
   }
 
   return (
@@ -146,14 +139,9 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-medium">Recent Collections</h2>
-          <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            <input
-              type="checkbox"
-              checked={editingEnabled}
-              onChange={(e) => setEditingEnabled(e.target.checked)}
-            />
-            Enable Editing
-          </label>
+          <p className="text-xs text-[var(--muted)]">
+            Entries are permanent — use a contra entry to correct a mistake.
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
@@ -164,7 +152,6 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                 <th className="pb-2">Method</th>
                 <th className="pb-2 text-right">Amount</th>
                 <th className="pb-2 text-right">When</th>
-                {editingEnabled && <th className="pb-2 text-right">Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -175,16 +162,6 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                   <td className="py-2 uppercase text-xs">{r.method}</td>
                   <td className="py-2 text-right">{formatMoney(r.amount)}</td>
                   <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
-                  {editingEnabled && (
-                    <td className="py-2 text-right">
-                      <button
-                        onClick={() => handleDelete(r.id)}
-                        className="text-xs font-medium text-red-500 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>
