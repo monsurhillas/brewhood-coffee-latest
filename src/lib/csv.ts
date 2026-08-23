@@ -33,13 +33,10 @@ export function parseCsv(text: string): string[][] {
       inQuotes = true;
     } else if (ch === ",") {
       pushField();
-    } else if (ch === "
-") {
+    } else if (ch === "\n") {
       pushRow();
-    } else if (ch === "
-") {
-      // skip, 
- handles the row break
+    } else if (ch === "\r") {
+      // skip, \n handles the row break
     } else {
       field += ch;
     }
@@ -52,8 +49,7 @@ export function parseCsv(text: string): string[][] {
 
 function escapeCsvField(value: unknown): string {
   const str = value === null || value === undefined ? "" : String(value);
-  if (/[",
-]/.test(str)) {
+  if (/[",\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -64,6 +60,5 @@ export function toCsv(headers: string[], rows: (string | number | null)[][]): st
   for (const row of rows) {
     lines.push(row.map(escapeCsvField).join(","));
   }
-  return lines.join("
-");
+  return lines.join("\n");
 }
