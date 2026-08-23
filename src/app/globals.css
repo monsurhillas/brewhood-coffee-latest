@@ -33,6 +33,30 @@
   }
 }
 
+/* Explicit theme classes set by the theme toggle (persisted in
+   localStorage). These have higher specificity than plain :root and the
+   prefers-color-scheme media query above, so a manual choice always wins
+   over the system default. */
+:root.light {
+  --background: #faf6f1;
+  --foreground: #241a12;
+  --brand: #6f4518;
+  --brand-dark: #4a2d0f;
+  --card: #ffffff;
+  --border: #e7dccd;
+  --muted: #8a7563;
+}
+
+:root.dark {
+  --background: #17120d;
+  --foreground: #f3ece3;
+  --brand: #d79a5e;
+  --brand-dark: #f0b579;
+  --card: #221a13;
+  --border: #362a1e;
+  --muted: #a6947f;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
