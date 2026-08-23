@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { formatMoney, formatDate } from "@/lib/format";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type Employee = {
   id: number;
@@ -83,12 +84,15 @@ export default function LedgerHome() {
               <p className="text-xs text-[var(--muted)]">Employee ledger</p>
             </div>
           </div>
-          <Link
-            href="/login"
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
-          >
-            Manager Login
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              href="/login"
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            >
+              Manager Login
+            </Link>
+          </div>
         </div>
       </header>
 
