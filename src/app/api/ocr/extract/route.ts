@@ -10,10 +10,15 @@ export const maxDuration = 60;
 // redeploy as newer Claude models become available.
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5-20250929";
 
+type ExtractedItem = {
+  item: string;
+  quantity: number;
+};
+
 type ExtractedRow = {
   sl: number;
   name: string;
-  items_sold: string[];
+  items_sold: ExtractedItem[];
   collection: { method: string; amount: number } | null;
 };
 
@@ -87,8 +92,20 @@ export async function POST(request: NextRequest) {
               items_sold: {
                 type: "array",
                 description:
-                  "One entry per menu-item checkbox that is ticked/checked in this row. A tick means one unit of that item was sold. Empty array if no item box is ticked.",
-                items: { type: "string", enum: itemNames },
+                  "One entry per menu-item checkbox that is ticked/checked in this row. Empty array if no item box is ticked.",
+                items: {
+                  type: "object",
+                  properties: {
+                    item: { type: "string", enum: itemNames },
+                    quantity: {
+                      type: "integer",
+                      minimum: 1,
+                      description:
+                        "Almost always 1 — a plain tick means one unit. Only use a higher number when the employee wrote an explicit handwritten multiplier on the right-hand side of that item's checkbox, such as '2X', 'x2', or '3X', to record buying several of that same item in one line. This handwritten scribble is completely different from the two PRINTED column headers 'Americano 2X' and 'Espresso 2X', which are their own separate double-shot menu items with their own checkbox column — a tick in one of those columns is quantity 1 of that double-shot item, not a multiplier.",
+                    },
+                  },
+                  required: ["item", "quantity"],
+                },
               },
               collection: {
                 type: ["object", "null"],
@@ -135,9 +152,9 @@ export async function POST(request: NextRequest) {
                 type: "text",
                 text: [
                   "This is a handwritten BrewHood 'Daily Sales & Collection Log'.",
-                  "Each row has: a serial number (SL), an employee Name (handwritten), a Payment Method with Cash/Bkash checkboxes plus a handwritten Amount (filled in only when a collection happened that day for that employee), and one checkbox column per menu item — a checked box means that employee sold one unit of that item that day.",
+                  "Each row has: a serial number (SL), an employee Name (handwritten, often just a first name or nickname, sometimes with a Bangla honorific like 'vai' or 'bhai' after it — transcribe it exactly as written, do not expand or correct it), a Payment Method with Cash/Bkash checkboxes plus a handwritten Amount (filled in only when a collection happened that day for that employee), and one checkbox column per menu item — a checked box means that employee bought that item that day.",
+                  "Some rows have a small handwritten multiplier such as '2X', 'x2', or '3X' written on the right-hand side of a ticked item's checkbox — that means the employee bought that many units of that same item, not one. Only treat it as a multiplier when it's clearly a handwritten addition next to a tick, not the sheet's own printed column headers — 'Americano 2X' and 'Espresso 2X' are separate, distinct printed menu-item columns (a double-shot variant with its own checkbox), and a plain tick in one of those columns is quantity 1 of that item, never a multiplier.",
                   "Read every handwritten mark carefully, including faint, small, or ambiguous ticks — a tick can be a check, an X, or a filled-in box.",
-                  "Transcribe names exactly as handwritten; do not silently correct or standardize spelling.",
                   "Only include rows where a name is actually written in them. Extract the date written in the 'Date:' field at the top of the page.",
                 ].join(" "),
               },
@@ -176,24 +193,33 @@ export async function POST(request: NextRequest) {
   const skuByName = new Map(skuList.map((s) => [s.name, s]));
   const employeeCandidates = employeeList.map((e) => ({ ...e, label: e.name }));
 
+  // Below this, the best guess is more likely wrong than right — leave the
+  // employee unset rather than silently attaching sales to the wrong person;
+  // the manager picks manually from the dropdown instead.
+  const MIN_CONFIDENCE_TO_AUTOFILL = 0.5;
+  const LOW_CONFIDENCE_THRESHOLD = 0.72;
+
   const rows = (extracted.rows ?? []).map((row) => {
     const match = bestMatch(row.name, employeeCandidates);
+    const confidentEnough = match.score >= MIN_CONFIDENCE_TO_AUTOFILL;
     const sales = (row.items_sold ?? [])
-      .map((itemName) => {
-        const sku = skuByName.get(itemName);
+      .map((entry) => {
+        const sku = skuByName.get(entry.item);
         if (!sku) return null;
-        return { sku_id: sku.id, sku_name: sku.name, quantity: 1, unit_price: sku.price };
+        const quantity = Math.max(1, Math.round(entry.quantity || 1));
+        return { sku_id: sku.id, sku_name: sku.name, quantity, unit_price: sku.price };
       })
       .filter((s): s is { sku_id: number; sku_name: string; quantity: number; unit_price: number } => s !== null);
 
     return {
       sl: row.sl,
       raw_name: row.name,
-      matched_employee: match.candidate
-        ? { id: match.candidate.id, employee_id: match.candidate.employee_id, name: match.candidate.name }
-        : null,
+      matched_employee:
+        match.candidate && confidentEnough
+          ? { id: match.candidate.id, employee_id: match.candidate.employee_id, name: match.candidate.name }
+          : null,
       match_confidence: Math.round(match.score * 100) / 100,
-      low_confidence: match.score < 0.72,
+      low_confidence: !confidentEnough || match.score < LOW_CONFIDENCE_THRESHOLD,
       sales,
       collection: row.collection ? { method: row.collection.method, amount: row.collection.amount } : null,
     };
