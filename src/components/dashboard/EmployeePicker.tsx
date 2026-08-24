@@ -11,9 +11,9 @@ export type EmployeeOption = {
 };
 
 function balanceClass(balance: number): string {
-  if (balance > 0) return "text-amber-600";
   if (balance < 0) return "text-red-500";
-  return "text-emerald-600";
+  if (balance > 0) return "text-emerald-600";
+  return "text-[var(--muted)]";
 }
 
 export default function EmployeePicker({
