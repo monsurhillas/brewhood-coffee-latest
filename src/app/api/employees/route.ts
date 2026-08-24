@@ -12,12 +12,24 @@ export async function GET(request: NextRequest) {
 
   const db = sql();
 
+  // balance_override (when set) is a one-time reconciled snapshot balance
+  // carried over from the legacy system at the moment an employee was
+  // imported — it is NOT a permanent freeze. Any sale/collection recorded
+  // after that employee's row was created is genuinely new activity and
+  // must be added on top of the override, or it would silently never move
+  // the employee's balance again. Employees without an override (added
+  // directly in this app) have no activity that predates their own
+  // created_at, so this is a no-op for them and behaves exactly as before.
   const rows = await db`
     SELECT
       e.id, e.employee_id, e.name, e.phone, e.role, e.active, e.created_at,
       COALESCE(s.total_sales, 0)::float8 AS total_sales,
       COALESCE(c.total_collected, 0)::float8 AS total_collected,
-      -COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance,
+      -(
+        COALESCE(e.balance_override, 0)
+        + COALESCE((SELECT SUM(sa.total) FROM sales sa WHERE sa.employee_id = e.id AND sa.created_at > e.created_at), 0)
+        - COALESCE((SELECT SUM(CASE WHEN co.is_contra THEN -co.amount ELSE co.amount END) FROM collections co WHERE co.employee_id = e.id AND co.created_at > e.created_at), 0)
+      )::float8 AS balance,
       GREATEST(s.last_sale_at, c.last_activity_at) AS last_activity_at
     FROM employees e
     LEFT JOIN (
