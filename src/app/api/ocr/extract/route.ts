@@ -11,7 +11,7 @@ export const maxDuration = 60;
 // understanding, so the Bulk Upload OCR doesn't depend on a paid Anthropic
 // key. Configurable so the model can be bumped in Vercel env vars without a
 // code change as newer Gemini models ship.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 type ExtractedItem = {
   item: string;
