@@ -17,6 +17,11 @@ export async function GET() {
 
   const db = sql();
 
+  // balance_override, when set, is a one-time reconciled snapshot from the
+  // legacy-system import — not a permanent freeze. Only activity recorded
+  // AFTER the employee's row was created (i.e. after import) is added on
+  // top of it, so new sales/collections keep moving the totals instead of
+  // being silently ignored forever.
   const [row] = await db`
     SELECT
       COALESCE(SUM(GREATEST(bal, 0)), 0)::float8 AS outstanding,
@@ -26,14 +31,10 @@ export async function GET() {
     FROM (
       SELECT
         e.active,
-        COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0)) AS bal
+        COALESCE(e.balance_override, 0)
+          + COALESCE((SELECT SUM(sa.total) FROM sales sa WHERE sa.employee_id = e.id AND sa.created_at > e.created_at), 0)
+          - COALESCE((SELECT SUM(CASE WHEN co.is_contra THEN -co.amount ELSE co.amount END) FROM collections co WHERE co.employee_id = e.id AND co.created_at > e.created_at), 0) AS bal
       FROM employees e
-      LEFT JOIN (SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id) s
-        ON s.employee_id = e.id
-      LEFT JOIN (
-        SELECT employee_id, SUM(CASE WHEN is_contra THEN -amount ELSE amount END) AS total_collected
-        FROM collections GROUP BY employee_id
-      ) c ON c.employee_id = e.id
     ) x
   `;
 
