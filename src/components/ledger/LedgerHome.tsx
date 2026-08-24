@@ -40,10 +40,10 @@ type ActivityItem = {
 };
 
 const FILTERS: { key: string; label: string }[] = [
+  { key: "recent_activity", label: "Recent Activity" },
+  { key: "negative_balance", label: "Negative Balance" },
   { key: "all", label: "All Employees" },
   { key: "active_today", label: "Active Today" },
-  { key: "negative_balance", label: "Owes Balance" },
-  { key: "recent_activity", label: "Recent Activity" },
 ];
 
 function balanceClass(balance: number): string {
@@ -126,7 +126,7 @@ export default function LedgerHome() {
           </div>
         </div>
 
-        <div className="relative mx-auto max-w-5xl px-6 pb-14 pt-6 text-center sm:pb-16 sm:pt-10">
+        <div className="relative mx-auto max-w-5xl px-6 pb-8 pt-6 text-center sm:pt-10">
           <p className="text-4xl sm:text-5xl">☕</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             Great coffee, honest tabs.
@@ -139,35 +139,31 @@ export default function LedgerHome() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-8">
-        {/* Search & filters card, floating up into the hero */}
-        <div className="-mt-8 mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-lg shadow-black/5 sm:-mt-10 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {status !== "recent_activity" ? (
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name, ID, or phone…"
-                className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-              />
-            ) : (
-              <p className="text-sm font-medium">What&apos;s brewing</p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setStatus(f.key)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    status === f.key
-                      ? "border-[var(--brand)] bg-[var(--brand)] text-white"
-                      : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+        {/* Filter tabs, then search — in that order, in a plain section below the hero */}
+        <div className="mt-6 mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setStatus(f.key)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  status === f.key
+                    ? "border-[var(--brand)] bg-[var(--brand)] text-white"
+                    : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
+          {status !== "recent_activity" && (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by employee name…"
+              className="mt-3 w-full max-w-sm rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          )}
         </div>
 
         {status === "recent_activity" ? (
@@ -191,9 +187,7 @@ export default function LedgerHome() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-medium">{e.name}</p>
-                        <p className="text-xs text-[var(--muted)]">
-                          #{e.employee_id} {e.role ? `· ${e.role}` : ""}
-                        </p>
+                        {e.role && <p className="text-xs text-[var(--muted)]">{e.role}</p>}
                       </div>
                       {!e.active && (
                         <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
@@ -299,9 +293,7 @@ function ActivityFeed() {
               <p className="text-sm">
                 <span className="font-medium">{activitySentence(item)}</span>
               </p>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                #{item.employee_code} · {formatRelativeTime(item.created_at)}
-              </p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">{formatRelativeTime(item.created_at)}</p>
             </div>
           </li>
         ))}
@@ -338,7 +330,7 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
           <div>
             <h2 className="text-lg font-semibold">{employee.name}</h2>
             <p className="text-xs text-[var(--muted)]">
-              #{employee.employee_id} · Balance{" "}
+              Balance{" "}
               <span className={balanceClass(employee.balance)}>{formatMoney(employee.balance)}</span>
             </p>
           </div>
