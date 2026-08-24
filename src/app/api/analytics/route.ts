@@ -114,7 +114,7 @@ export async function GET() {
       e.id, e.employee_id, e.name,
       COALESCE(s.total_sales, 0)::float8 AS total_sales,
       COALESCE(c.total_collected, 0)::float8 AS total_collected,
-      COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance
+      -COALESCE(e.balance_override, COALESCE(s.total_sales, 0) - COALESCE(c.total_collected, 0))::float8 AS balance
     FROM employees e
     LEFT JOIN (
       SELECT employee_id, SUM(total) AS total_sales FROM sales GROUP BY employee_id
