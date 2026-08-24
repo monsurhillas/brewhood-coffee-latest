@@ -52,6 +52,12 @@ function balanceClass(balance: number): string {
   return "text-[var(--muted)]";
 }
 
+const BKASH_NUMBER = "01744337974";
+
+function paymentReference(employee: Employee): string {
+  return `${employee.name} (${employee.employee_id})`;
+}
+
 export default function LedgerHome() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,6 +310,8 @@ function ActivityFeed() {
 
 function TransactionModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
+  const [showPay, setShowPay] = useState(false);
+  const owesMoney = employee.balance < 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -339,6 +347,15 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
           </button>
         </div>
 
+        {owesMoney && (
+          <button
+            onClick={() => setShowPay(true)}
+            className="mb-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[#E2136E] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+          >
+            <span aria-hidden>📱</span> Scan to Pay {formatMoney(-employee.balance)}
+          </button>
+        )}
+
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
           Transaction History (Last 20)
         </h3>
@@ -367,6 +384,55 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
             ))}
           </ul>
         )}
+      </div>
+
+      {showPay && <ScanToPayModal employee={employee} onClose={() => setShowPay(false)} />}
+    </div>
+  );
+}
+
+function ScanToPayModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  const due = -employee.balance;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-t-2xl bg-[var(--card)] p-6 text-center sm:rounded-2xl"
+      >
+        <div className="mb-4 flex items-start justify-between text-left">
+          <div>
+            <h2 className="text-base font-semibold">{employee.name}</h2>
+            <p className="text-xs text-[var(--muted)]">
+              Amount due <span className="font-semibold text-red-500">{formatMoney(due)}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">
+            Close
+          </button>
+        </div>
+
+        <img
+          src="/bkash-qr.png"
+          alt="bKash QR code — scan to pay BrewHood Coffee"
+          className="mx-auto w-full max-w-[240px] rounded-xl border border-[var(--border)]"
+        />
+
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Scan with the bKash app, or Send Money to{" "}
+          <span className="font-semibold text-[var(--foreground)]">{BKASH_NUMBER}</span>
+        </p>
+
+        <div className="mt-4 rounded-lg border border-dashed border-[var(--border)] bg-black/5 px-3 py-2 text-left dark:bg-white/5">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Reference — please include</p>
+          <p className="text-sm font-medium">{paymentReference(employee)}</p>
+        </div>
       </div>
     </div>
   );
