@@ -5,6 +5,12 @@ import { formatMoney } from "@/lib/format";
 
 type Sku = { id: number; name: string; category: string | null; price: string; active: boolean };
 
+type BackfillResult = {
+  updated: number;
+  unresolvedPricing: { id: number; sku_name: string; total: number; price: number; employee_name: string }[];
+  unresolvedNoSku: { id: number; sku_name: string; total: number; employee_name: string }[];
+};
+
 export default function SkusTab() {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [name, setName] = useState("");
@@ -12,6 +18,9 @@ export default function SkusTab() {
   const [price, setPrice] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -55,6 +64,20 @@ export default function SkusTab() {
       body: JSON.stringify({ active: !sku.active }),
     });
     load();
+  }
+
+  async function runBackfill() {
+    setBackfilling(true);
+    setBackfillError(null);
+    setBackfillResult(null);
+    const res = await fetch("/api/admin/backfill-sale-quantities", { method: "POST" });
+    setBackfilling(false);
+    if (res.ok) {
+      setBackfillResult(await res.json());
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setBackfillError(data.error ?? "Failed to run the fix.");
+    }
   }
 
   return (
@@ -137,6 +160,64 @@ export default function SkusTab() {
           </table>
           {skus.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No items yet.</p>}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 lg:col-span-2">
+        <h2 className="font-medium">Fix legacy sale quantities</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          The old system only exported a total per sale, not a quantity, so imported rows like a ৳450 Cappuccino
+          line show as &ldquo;Cappuccino × 1&rdquo; instead of &ldquo;× 3&rdquo;. This backs out the real quantity
+          and per-item price wherever the total divides evenly by the item&apos;s current price. It only touches
+          rows imported from the legacy system — nothing entered through Sale Entry or Bulk Upload is affected.
+        </p>
+        <button
+          onClick={runBackfill}
+          disabled={backfilling}
+          className="mt-3 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+        >
+          {backfilling ? "Fixing…" : "Fix legacy sale quantities"}
+        </button>
+
+        {backfillError && <p className="mt-3 text-sm text-red-500">{backfillError}</p>}
+
+        {backfillResult && (
+          <div className="mt-4 text-sm">
+            <p className="font-medium text-emerald-600">
+              Fixed {backfillResult.updated} sale{backfillResult.updated === 1 ? "" : "s"}.
+            </p>
+
+            {backfillResult.unresolvedPricing.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Couldn&apos;t auto-fix — total doesn&apos;t divide evenly by the item&apos;s current price
+                </p>
+                <ul className="mt-1 divide-y divide-[var(--border)]">
+                  {backfillResult.unresolvedPricing.map((r) => (
+                    <li key={r.id} className="py-1.5 text-xs text-[var(--muted)]">
+                      {r.employee_name} — {r.sku_name} — total {formatMoney(r.total)} vs current price{" "}
+                      {formatMoney(r.price)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {backfillResult.unresolvedNoSku.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Couldn&apos;t auto-fix — item name didn&apos;t match a SKU on import
+                </p>
+                <ul className="mt-1 divide-y divide-[var(--border)]">
+                  {backfillResult.unresolvedNoSku.map((r) => (
+                    <li key={r.id} className="py-1.5 text-xs text-[var(--muted)]">
+                      {r.employee_name} — {r.sku_name} — total {formatMoney(r.total)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
