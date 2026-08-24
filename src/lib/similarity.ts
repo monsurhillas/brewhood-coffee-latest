@@ -3,6 +3,29 @@
 // Levenshtein distance plus a token-overlap score, so short handwritten
 // variants ("Md Rakib" vs "Md. Rakibuzzaman") still surface a reasonable
 // best guess for the manager to confirm or override.
+//
+// Handwritten logs are often informal — "Nihan vai", "Rakib bhai" — using a
+// first name plus a Bangla honorific rather than the full name on file
+// ("Nihan Ahmed"). Those honorifics are stripped before matching, and an
+// exact single-word match against one token of a candidate's full name is
+// treated as a strong (but not certain) signal, the way a manager skimming
+// the sheet would recognize a coworker by first name alone.
+
+const HONORIFIC_WORDS = new Set([
+  "vai",
+  "bhai",
+  "bhaiya",
+  "bhaia",
+  "vaiya",
+  "vaia",
+  "bro",
+  "apu",
+  "apa",
+  "appa",
+  "appu",
+  "sir",
+  "boss",
+]);
 
 function normalize(s: string): string {
   return s
@@ -10,6 +33,13 @@ function normalize(s: string): string {
     .replace(/[.,]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function stripHonorifics(tokens: string[]): string[] {
+  const filtered = tokens.filter((t) => !HONORIFIC_WORDS.has(t));
+  // Never strip every token away — if the whole name is somehow just an
+  // honorific, fall back to matching on it as-is rather than matching nothing.
+  return filtered.length > 0 ? filtered : tokens;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -39,13 +69,13 @@ function charSimilarity(a: string, b: string): number {
   return 1 - levenshtein(a, b) / maxLen;
 }
 
-function tokenSimilarity(a: string, b: string): number {
-  const ta = new Set(a.split(" ").filter(Boolean));
-  const tb = new Set(b.split(" ").filter(Boolean));
-  if (ta.size === 0 || tb.size === 0) return 0;
+function tokenSimilarity(ta: string[], tb: string[]): number {
+  const setA = new Set(ta);
+  const setB = new Set(tb);
+  if (setA.size === 0 || setB.size === 0) return 0;
   let intersection = 0;
-  for (const t of ta) if (tb.has(t)) intersection++;
-  const union = new Set([...ta, ...tb]).size;
+  for (const t of setA) if (setB.has(t)) intersection++;
+  const union = new Set([...setA, ...setB]).size;
   return intersection / union;
 }
 
@@ -54,7 +84,26 @@ export function nameSimilarity(a: string, b: string): number {
   const nb = normalize(b);
   if (!na || !nb) return 0;
   if (na === nb) return 1;
-  return Math.max(charSimilarity(na, nb), tokenSimilarity(na, nb));
+
+  const tokensA = stripHonorifics(na.split(" ").filter(Boolean));
+  const tokensB = stripHonorifics(nb.split(" ").filter(Boolean));
+  const strippedA = tokensA.join(" ");
+  const strippedB = tokensB.join(" ");
+
+  let score = Math.max(charSimilarity(strippedA, strippedB), tokenSimilarity(tokensA, tokensB));
+
+  // Nickname / first-name-only heuristic: a handwritten single-word name
+  // (after stripping an honorific like "vai") that exactly matches one
+  // token of the full employee name is a strong signal — coworkers commonly
+  // refer to each other by first name only. Kept below 1.0 since a shared
+  // first name across employees is still possible.
+  if (tokensA.length === 1 && tokensA[0].length >= 3 && tokensB.includes(tokensA[0])) {
+    score = Math.max(score, 0.8);
+  } else if (tokensB.length === 1 && tokensB[0].length >= 3 && tokensA.includes(tokensB[0])) {
+    score = Math.max(score, 0.8);
+  }
+
+  return score;
 }
 
 export function bestMatch<T extends { label: string }>(
