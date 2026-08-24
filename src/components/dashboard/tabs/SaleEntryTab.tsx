@@ -77,6 +77,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
 
     if (res.ok) {
       setMessage("Sale recorded.");
+      setEmployee(null);
       setSkuId("");
       setUnitPrice("");
       setQuantity("1");

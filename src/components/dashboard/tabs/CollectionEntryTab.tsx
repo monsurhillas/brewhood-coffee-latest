@@ -61,6 +61,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
 
     if (res.ok) {
       setMessage(isContra ? "Contra entry recorded." : "Collection recorded.");
+      setEmployee(null);
       setAmount("");
       setNote("");
       setIsContra(false);
