@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatMoney } from "@/lib/format";
 
 export type EmployeeOption = {
@@ -26,6 +26,7 @@ export default function EmployeePicker({
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<EmployeeOption[]>([]);
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -37,6 +38,20 @@ export default function EmployeePicker({
     return () => clearTimeout(t);
   }, [query, open]);
 
+  // Close the dropdown on any click outside this picker — otherwise it
+  // stays open (or the click just lands behind it) until something else
+  // happens to close it.
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
+
   function clearSelection() {
     onSelect(null);
     setQuery("");
@@ -44,7 +59,7 @@ export default function EmployeePicker({
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <input
         value={selected ? `${selected.name} (#${selected.employee_id})` : query}
         onChange={(e) => {

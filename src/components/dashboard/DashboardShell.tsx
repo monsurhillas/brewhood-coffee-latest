@@ -162,27 +162,77 @@ function SummaryTile({
 }
 
 function DownloadReportsPanel() {
-  const types: { key: string; label: string; desc: string }[] = [
-    { key: "sales", label: "Sales Report", desc: "Every sale entry with employee, item, quantity, and total." },
-    { key: "collections", label: "Collections Report", desc: "Every collection and contra entry." },
-    { key: "costs", label: "Manager Costs Report", desc: "All manager-logged cost entries." },
-    { key: "employees", label: "Employees Report", desc: "Employee directory with running balances." },
+  const types: { key: string; label: string; desc: string; dateScoped: boolean }[] = [
+    { key: "sales", label: "Sales Report", desc: "Every sale entry with employee, item, quantity, and total.", dateScoped: true },
+    { key: "collections", label: "Collections Report", desc: "Every collection and contra entry.", dateScoped: true },
+    { key: "costs", label: "Manager Costs Report", desc: "All manager-logged cost entries.", dateScoped: true },
+    { key: "employees", label: "Employees Report", desc: "Employee directory with running balances.", dateScoped: false },
   ];
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  function reportHref(key: string, dateScoped: boolean) {
+    const params = new URLSearchParams({ type: key });
+    if (dateScoped && from) params.set("from", from);
+    if (dateScoped && to) params.set("to", to);
+    return `/api/reports/export?${params.toString()}`;
+  }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {types.map((t) => (
-        <div key={t.key} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-          <h3 className="font-medium">{t.label}</h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">{t.desc}</p>
-          <a
-            href={`/api/reports/export?type=${t.key}`}
-            className="mt-4 inline-block rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Download CSV
-          </a>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">From</label>
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+          />
         </div>
-      ))}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">To</label>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+          />
+        </div>
+        {(from || to) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFrom("");
+              setTo("");
+            }}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          >
+            Clear range
+          </button>
+        )}
+        <p className="text-xs text-[var(--muted)]">Applies to Sales, Collections, and Manager Costs. Leave blank for everything.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {types.map((t) => (
+          <div key={t.key} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+            <h3 className="font-medium">{t.label}</h3>
+            <p className="mt-1 text-sm text-[var(--muted)]">{t.desc}</p>
+            {!t.dateScoped && (from || to) && (
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                This report is a live snapshot, not a dated log — the date range doesn&apos;t apply here.
+              </p>
+            )}
+            <a
+              href={reportHref(t.key, t.dateScoped)}
+              className="mt-4 inline-block rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Download CSV
+            </a>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
