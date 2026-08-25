@@ -169,6 +169,39 @@ export default function BulkUploadTab({ onSaved }: { onSaved: () => void }) {
     }));
   }
 
+  function addManualRow() {
+    setRows((prev) => {
+      const list = prev ?? [];
+      const nextSl = list.reduce((max, r) => Math.max(max, r.sl), 0) + 1;
+      return [
+        ...list,
+        {
+          key: uid(),
+          sl: nextSl,
+          raw_name: "",
+          employee: null,
+          low_confidence: false,
+          match_confidence: 0,
+          included: true,
+          sales: [],
+          collection: null,
+        },
+      ];
+    });
+  }
+
+  function removeRow(rowIndex: number) {
+    setRows((prev) => (prev ? prev.filter((_, i) => i !== rowIndex) : prev));
+  }
+
+  function cancelUpload() {
+    setRows(null);
+    setFileName(null);
+    setError(null);
+    setSuccessMessage(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
   function toggleCollection(rowIndex: number) {
     updateRow(rowIndex, (r) => ({
       ...r,
@@ -271,7 +304,7 @@ export default function BulkUploadTab({ onSaved }: { onSaved: () => void }) {
         {successMessage && <p className="mt-3 text-sm text-emerald-600">{successMessage}</p>}
       </div>
 
-      {rows && rows.length > 0 && (
+      {rows !== null && (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -305,7 +338,11 @@ export default function BulkUploadTab({ onSaved }: { onSaved: () => void }) {
                     <span className="mt-1 text-xs text-[var(--muted)]">SL {row.sl}</span>
                     <div className="min-w-[220px]">
                       <p className="mb-1 text-xs text-[var(--muted)]">
-                        Handwritten: &ldquo;{row.raw_name}&rdquo;
+                        {row.raw_name ? (
+                          <>Handwritten: &ldquo;{row.raw_name}&rdquo;</>
+                        ) : (
+                          <span className="italic">Manual entry</span>
+                        )}
                         {row.low_confidence && (
                           <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
                             low-confidence match — verify
@@ -318,14 +355,23 @@ export default function BulkUploadTab({ onSaved }: { onSaved: () => void }) {
                       />
                     </div>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                    <input
-                      type="checkbox"
-                      checked={row.included}
-                      onChange={() => updateRow(rowIndex, (r) => ({ ...r, included: !r.included }))}
-                    />
-                    Include this row
-                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={row.included}
+                        onChange={() => updateRow(rowIndex, (r) => ({ ...r, included: !r.included }))}
+                      />
+                      Include this row
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(rowIndex)}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Remove row
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -405,12 +451,30 @@ export default function BulkUploadTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           <button
-            onClick={handleConfirm}
-            disabled={submitting}
-            className="mt-5 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            type="button"
+            onClick={addManualRow}
+            className="mt-4 rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
           >
-            {submitting ? "Uploading…" : `Confirm & Upload for ${date}`}
+            + Add manual entry
           </button>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {submitting ? "Uploading…" : `Confirm & Upload for ${date}`}
+            </button>
+            <button
+              type="button"
+              onClick={cancelUpload}
+              disabled={submitting}
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:border-red-400 hover:text-red-500 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
     </div>

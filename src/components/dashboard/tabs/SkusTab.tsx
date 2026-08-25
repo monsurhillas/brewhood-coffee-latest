@@ -21,6 +21,10 @@ export default function SkusTab() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [priceSaving, setPriceSaving] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -64,6 +68,42 @@ export default function SkusTab() {
       body: JSON.stringify({ active: !sku.active }),
     });
     load();
+  }
+
+  function startEditPrice(sku: Sku) {
+    setEditingId(sku.id);
+    setEditPrice(String(Number(sku.price)));
+    setPriceError(null);
+  }
+
+  function cancelEditPrice() {
+    setEditingId(null);
+    setEditPrice("");
+    setPriceError(null);
+  }
+
+  async function saveEditPrice(sku: Sku) {
+    const value = Number(editPrice);
+    if (!editPrice || Number.isNaN(value) || value < 0) {
+      setPriceError("Enter a valid price.");
+      return;
+    }
+    setPriceSaving(true);
+    setPriceError(null);
+    const res = await fetch(`/api/skus/${sku.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ price: value }),
+    });
+    setPriceSaving(false);
+    if (res.ok) {
+      setEditingId(null);
+      setEditPrice("");
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setPriceError(data.error ?? "Failed to update price.");
+    }
   }
 
   async function runBackfill() {
@@ -126,6 +166,8 @@ export default function SkusTab() {
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Menu / SKUs</h2>
+        <p className="mb-3 text-xs text-[var(--muted)]">Click a price to edit it.</p>
+        {priceError && <p className="mb-3 text-sm text-red-500">{priceError}</p>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
@@ -141,7 +183,47 @@ export default function SkusTab() {
                 <tr key={s.id} className="border-b border-[var(--border)] last:border-0">
                   <td className="py-2">{s.name}</td>
                   <td className="py-2 text-[var(--muted)]">{s.category ?? "—"}</td>
-                  <td className="py-2 text-right">{formatMoney(Number(s.price))}</td>
+                  <td className="py-2 text-right">
+                    {editingId === s.id ? (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          autoFocus
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEditPrice(s);
+                            if (e.key === "Escape") cancelEditPrice();
+                          }}
+                          className="w-24 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1 text-right text-sm outline-none focus:border-[var(--brand)]"
+                        />
+                        <button
+                          onClick={() => saveEditPrice(s)}
+                          disabled={priceSaving}
+                          className="rounded px-1.5 py-1 text-xs font-medium text-emerald-600 hover:underline disabled:opacity-60"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={cancelEditPrice}
+                          disabled={priceSaving}
+                          className="rounded px-1.5 py-1 text-xs text-[var(--muted)] hover:underline disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditPrice(s)}
+                        title="Edit price"
+                        className="rounded px-1.5 py-0.5 hover:bg-black/5 dark:hover:bg-white/5"
+                      >
+                        {formatMoney(Number(s.price))} <span aria-hidden className="ml-1 text-xs text-[var(--muted)]">✎</span>
+                      </button>
+                    )}
+                  </td>
                   <td className="py-2 text-right">
                     <button
                       onClick={() => toggleActive(s)}
