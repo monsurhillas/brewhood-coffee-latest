@@ -22,6 +22,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Optional date range filter (YYYY-MM-DD, inclusive). Only applies to the
+  // date-scoped logs (sales/collections/costs) — the employees report is a
+  // live snapshot, not a log of dated events, so it ignores these.
+  const fromParam = request.nextUrl.searchParams.get("from");
+  const toParam = request.nextUrl.searchParams.get("to");
+  const fromTs = fromParam ? `${fromParam}T00:00:00.000Z` : null;
+  const toTs = toParam ? `${toParam}T23:59:59.999Z` : null;
+
   const db = sql();
   let csv: string;
 
@@ -30,6 +38,8 @@ export async function GET(request: NextRequest) {
       SELECT sa.created_at, e.employee_id, e.name, sa.sku_name, sa.quantity,
              sa.unit_price::float8, sa.total::float8, sa.note
       FROM sales sa JOIN employees e ON e.id = sa.employee_id
+      WHERE (${fromTs}::timestamptz IS NULL OR sa.created_at >= ${fromTs}::timestamptz)
+        AND (${toTs}::timestamptz IS NULL OR sa.created_at <= ${toTs}::timestamptz)
       ORDER BY sa.created_at DESC
     `;
     csv = toCsv(
@@ -49,6 +59,8 @@ export async function GET(request: NextRequest) {
     const rows = await db`
       SELECT c.created_at, e.employee_id, e.name, c.amount::float8, c.method, c.is_contra, c.note
       FROM collections c JOIN employees e ON e.id = c.employee_id
+      WHERE (${fromTs}::timestamptz IS NULL OR c.created_at >= ${fromTs}::timestamptz)
+        AND (${toTs}::timestamptz IS NULL OR c.created_at <= ${toTs}::timestamptz)
       ORDER BY c.created_at DESC
     `;
     csv = toCsv(
@@ -65,7 +77,10 @@ export async function GET(request: NextRequest) {
     );
   } else if (type === "costs") {
     const rows = await db`
-      SELECT created_at, category, amount::float8, note FROM manager_costs ORDER BY created_at DESC
+      SELECT created_at, category, amount::float8, note FROM manager_costs
+      WHERE (${fromTs}::timestamptz IS NULL OR created_at >= ${fromTs}::timestamptz)
+        AND (${toTs}::timestamptz IS NULL OR created_at <= ${toTs}::timestamptz)
+      ORDER BY created_at DESC
     `;
     csv = toCsv(
       ["Date", "Category", "Amount", "Note"],
