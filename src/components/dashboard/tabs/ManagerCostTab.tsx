@@ -6,7 +6,7 @@ import { formatMoney, formatDate } from "@/lib/format";
 
 type CostRow = { id: number; category: string; amount: number; note: string | null; created_at: string };
 
-const CATEGORIES = ["Rent", "Utilities", "Supplies", "Maintenance", "Salaries", "Other"];
+const CATEGORIES = ["Beans", "Milk", "Salary", "Maintenance", "Others"];
 
 export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
