@@ -26,14 +26,15 @@ type Transaction = {
   amount: number;
   method: string | null;
   note: string | null;
-  balance_after: number;
+  counted: boolean;
+  balance_after: number | null;
 };
 
 type LedgerResponse = {
   employee: Employee;
   openingBalance: number;
   currentBalance: number;
-  totals: { sales: number; collected: number; contra: number; transactionCount: number };
+  totals: { sales: number; collected: number; contra: number; transactionCount: number; preImportCount: number };
   transactions: Transaction[];
 };
 
@@ -121,10 +122,16 @@ export default function EmployeeLedgerTab() {
 
       {data && !loading && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <SummaryCard label="Employee" value={data.employee.name} sub={`#${data.employee.employee_id}${data.employee.active ? "" : " · Inactive"}`} />
-            <SummaryCard label="Total Sales" value={formatMoney(data.totals.sales)} />
-            <SummaryCard label="Total Collected" value={formatMoney(data.totals.collected)} sub={data.totals.contra ? `incl. ${formatMoney(data.totals.contra)} contra` : undefined} />
+            <SummaryCard
+              label="Opening Balance"
+              value={formatMoney(data.openingBalance)}
+              valueClassName={balanceClass(data.openingBalance)}
+              sub={data.employee.has_override ? "Carried over from import" : "No prior balance"}
+            />
+            <SummaryCard label="Total Sales" value={formatMoney(data.totals.sales)} sub="Since opening balance" />
+            <SummaryCard label="Total Collected" value={formatMoney(data.totals.collected)} sub={data.totals.contra ? `incl. ${formatMoney(data.totals.contra)} contra` : "Since opening balance"} />
             <SummaryCard
               label="Current Balance"
               value={formatMoney(data.currentBalance)}
@@ -132,6 +139,15 @@ export default function EmployeeLedgerTab() {
               sub={data.currentBalance < 0 ? "Owes the shop" : data.currentBalance > 0 ? "Shop owes employee" : "Settled"}
             />
           </div>
+
+          {data.totals.preImportCount > 0 && (
+            <p className="text-xs text-[var(--muted)]">
+              {data.totals.preImportCount} of {data.totals.transactionCount} entries below are dated before this
+              employee&apos;s opening balance was struck — they&apos;re already reflected in it, so they&apos;re shown for
+              the record but don&apos;t move the running balance (marked <span className="italic">pre-import</span>{" "}
+              below).
+            </p>
+          )}
 
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
             <div>
@@ -207,6 +223,14 @@ export default function EmployeeLedgerTab() {
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${typeBadgeClass(t.type)}`}>
                         {t.type}
                       </span>
+                      {!t.counted && (
+                        <span
+                          className="ml-1 rounded bg-black/5 px-1.5 py-0.5 text-[10px] italic text-[var(--muted)] dark:bg-white/10"
+                          title="Dated before this employee's opening balance was struck — already reflected in it, so it isn't applied again here."
+                        >
+                          pre-import
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {t.type === "sale"
@@ -217,8 +241,8 @@ export default function EmployeeLedgerTab() {
                       {t.type === "sale" ? "-" : t.type === "contra" ? "-" : "+"}
                       {formatMoney(t.amount)}
                     </td>
-                    <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${balanceClass(t.balance_after)}`}>
-                      {formatMoney(t.balance_after)}
+                    <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${t.counted ? balanceClass(t.balance_after ?? 0) : "text-[var(--muted)]"}`}>
+                      {t.counted ? formatMoney(t.balance_after ?? 0) : "—"}
                     </td>
                     <td className="px-3 py-2 text-xs text-[var(--muted)]">{t.note || "—"}</td>
                   </tr>
