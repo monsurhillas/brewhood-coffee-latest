@@ -18,6 +18,17 @@ export const dynamic = "force-dynamic";
 // balance down by its total; a regular collection moves it up by its
 // amount; a contra entry (a correction/reversal) moves it back down by its
 // amount, since it cancels out a prior collection.
+//
+// balance_override (when set) is a one-time reconciled snapshot from a
+// legacy-system import, struck at the moment the employee's row was
+// created — see /api/employees for the full rationale. Anything dated
+// before that moment is already baked into the snapshot, so — exactly as
+// /api/employees, /api/summary, and /api/analytics all do — only sales and
+// collections with created_at AFTER the employee's created_at are allowed
+// to move the running balance. Every transaction still appears in the
+// list below (nothing is hidden), but a pre-import one is marked
+// counted: false and leaves the balance untouched, so the numbers here
+// always agree with the balance shown everywhere else in the app.
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -103,11 +114,13 @@ export async function GET(
   };
 
   const openingBalance = -(employee.balance_override ?? 0);
+  const employeeCreatedAtMs = new Date(employee.created_at).getTime();
   let running = openingBalance;
 
   const transactions = (rows as Row[]).map((r) => {
+    const counted = new Date(r.created_at).getTime() > employeeCreatedAtMs;
     const signedEffect = r.type === "sale" ? -r.amount : r.is_contra ? -r.amount : r.amount;
-    running += signedEffect;
+    if (counted) running += signedEffect;
     return {
       type: r.type,
       id: r.id,
@@ -119,19 +132,21 @@ export async function GET(
       amount: r.amount,
       method: r.method,
       note: r.note,
-      balance_after: Math.round(running * 100) / 100,
+      counted,
+      balance_after: counted ? Math.round(running * 100) / 100 : null,
     };
   });
 
   const totalSales = transactions
-    .filter((t) => t.type === "sale")
+    .filter((t) => t.type === "sale" && t.counted)
     .reduce((sum, t) => sum + t.amount, 0);
   const totalCollected = transactions
-    .filter((t) => t.type === "collection")
+    .filter((t) => t.type === "collection" && t.counted)
     .reduce((sum, t) => sum + t.amount, 0);
   const totalContra = transactions
-    .filter((t) => t.type === "contra")
+    .filter((t) => t.type === "contra" && t.counted)
     .reduce((sum, t) => sum + t.amount, 0);
+  const preImportCount = transactions.filter((t) => !t.counted).length;
 
   return NextResponse.json({
     employee: {
@@ -145,16 +160,19 @@ export async function GET(
       has_override: employee.balance_override !== null && Number(employee.balance_override) !== 0,
     },
     openingBalance: Math.round(openingBalance * 100) / 100,
-    currentBalance: transactions.length ? transactions[transactions.length - 1].balance_after : Math.round(openingBalance * 100) / 100,
+    currentBalance: Math.round(running * 100) / 100,
     totals: {
       sales: Math.round(totalSales * 100) / 100,
       collected: Math.round(totalCollected * 100) / 100,
       contra: Math.round(totalContra * 100) / 100,
       transactionCount: transactions.length,
+      preImportCount,
     },
     // Newest first, to match the rest of the dashboard's "recent activity"
     // convention — each row already carries the balance immediately after
-    // it happened, so reversing the order here doesn't lose that context.
+    // it happened (or null if it predates the opening balance and so was
+    // never applied — see the comment above), so reversing the order here
+    // doesn't lose that context.
     transactions: transactions.slice().reverse(),
   });
 }
