@@ -34,8 +34,10 @@ export const SCHEMA_STATEMENTS = [
     unit_price NUMERIC(10,2) NOT NULL,
     total NUMERIC(10,2) NOT NULL,
     note TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    uploaded_at TIMESTAMPTZ DEFAULT now()
   )`,
+  `ALTER TABLE sales ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ DEFAULT now()`,
   `CREATE TABLE IF NOT EXISTS collections (
     id SERIAL PRIMARY KEY,
     employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
@@ -43,8 +45,10 @@ export const SCHEMA_STATEMENTS = [
     method TEXT NOT NULL DEFAULT 'cash',
     is_contra BOOLEAN NOT NULL DEFAULT false,
     note TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    uploaded_at TIMESTAMPTZ DEFAULT now()
   )`,
+  `ALTER TABLE collections ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ DEFAULT now()`,
   `CREATE TABLE IF NOT EXISTS manager_costs (
     id SERIAL PRIMARY KEY,
     category TEXT NOT NULL,

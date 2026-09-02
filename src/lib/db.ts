@@ -50,3 +50,24 @@ export type ManagerUser = {
   password_hash: string;
   name: string;
 };
+
+// Self-healing lazy migration: makes sure `uploaded_at` (the true "when was
+// this row inserted" timestamp, independent of the possibly-hand-entered
+// `created_at` date) exists on sales/collections. Idempotent and cheap
+// (a no-op once the column is there), so routes that need it can just call
+// this instead of depending on the guarded /api/init endpoint being re-run.
+let _uploadedAtEnsured = false;
+export async function ensureUploadedAtColumn(): Promise<void> {
+  if (_uploadedAtEnsured) return;
+  const db = sql();
+  await db.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ DEFAULT now()`);
+  await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ DEFAULT now()`);
+  _uploadedAtEnsured = true;
+}
+
+// Bulk-upload entries can be edited for this long after they were actually
+// inserted (not the sale date the sheet says — the real upload time), then
+// they lock. Keeps a single source of truth for the window used by the
+// bulk-uploads list and the sales/collections edit endpoints.
+export const BULK_EDIT_WINDOW_DAYS = 7;
+export const BULK_UPLOAD_NOTE = "Bulk PDF upload";
