@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const db = sql();
 
-  const updated = await db`
+  const updatedSales = await db`
     UPDATE sales
     SET created_at = (${to}::date + created_at::time)
     WHERE note = 'Bulk PDF upload'
@@ -34,5 +34,17 @@ export async function POST(request: NextRequest) {
     RETURNING id, sku_name, quantity, total::float8, created_at
   `;
 
-  return NextResponse.json({ updated: updated.length, rows: updated });
+  const updatedCollections = await db`
+    UPDATE collections
+    SET created_at = (${to}::date + created_at::time)
+    WHERE note = 'Bulk PDF upload'
+      AND created_at::date = ${from}::date
+    RETURNING id, amount::float8, method, created_at
+  `;
+
+  return NextResponse.json({
+    updated: updatedSales.length + updatedCollections.length,
+    sales: updatedSales,
+    collections: updatedCollections,
+  });
 }
