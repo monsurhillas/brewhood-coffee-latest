@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, ensureUploadedAtColumn, BULK_UPLOAD_NOTE } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  await ensureUploadedAtColumn();
   const db = sql();
 
   // Stagger timestamps a second apart (still all on the chosen day) purely so
@@ -75,18 +76,24 @@ export async function POST(request: NextRequest) {
     return t.toISOString();
   };
 
+  // uploaded_at is the same for every row in this batch — it's the real
+  // moment this upload happened, independent of `date` (the sheet's date,
+  // which is exactly the value that sometimes gets misread). The 7-day
+  // edit window is measured from this, not from `created_at`.
+  const uploadedAt = new Date().toISOString();
+
   const queries = [
     ...sales.map((s) => {
       const total = Math.round(s.unit_price * s.quantity * 100) / 100;
       return db`
-        INSERT INTO sales (employee_id, sku_id, sku_name, quantity, unit_price, total, note, created_at)
-        VALUES (${s.employee_id}, ${s.sku_id}, ${s.sku_name}, ${s.quantity}, ${s.unit_price}, ${total}, ${"Bulk PDF upload"}, ${nextTimestamp()})
+        INSERT INTO sales (employee_id, sku_id, sku_name, quantity, unit_price, total, note, created_at, uploaded_at)
+        VALUES (${s.employee_id}, ${s.sku_id}, ${s.sku_name}, ${s.quantity}, ${s.unit_price}, ${total}, ${BULK_UPLOAD_NOTE}, ${nextTimestamp()}, ${uploadedAt})
       `;
     }),
     ...collections.map((c) => {
       return db`
-        INSERT INTO collections (employee_id, amount, method, is_contra, note, created_at)
-        VALUES (${c.employee_id}, ${c.amount}, ${c.method}, false, ${"Bulk PDF upload"}, ${nextTimestamp()})
+        INSERT INTO collections (employee_id, amount, method, is_contra, note, created_at, uploaded_at)
+        VALUES (${c.employee_id}, ${c.amount}, ${c.method}, false, ${BULK_UPLOAD_NOTE}, ${nextTimestamp()}, ${uploadedAt})
       `;
     }),
   ];
