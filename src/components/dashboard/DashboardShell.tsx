@@ -102,12 +102,12 @@ export default function DashboardShell({ managerName }: { managerName: string })
           <SummaryTile
             label="Total Outstanding"
             value={summary ? formatMoney(summary.outstanding) : "…"}
-            className="text-amber-600"
+            className="text-red-500"
           />
           <SummaryTile
             label="Total Advance Balance"
             value={summary ? formatMoney(summary.advance) : "…"}
-            className="text-red-500"
+            className="text-emerald-600"
           />
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6 pb-2">

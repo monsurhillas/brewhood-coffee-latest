@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, balanceClass } from "@/lib/format";
 
 export type EmployeeOption = {
   id: number;
@@ -9,12 +9,6 @@ export type EmployeeOption = {
   name: string;
   balance: number;
 };
-
-function balanceClass(balance: number): string {
-  if (balance < 0) return "text-red-500";
-  if (balance > 0) return "text-emerald-600";
-  return "text-[var(--muted)]";
-}
 
 export default function EmployeePicker({
   selected,
