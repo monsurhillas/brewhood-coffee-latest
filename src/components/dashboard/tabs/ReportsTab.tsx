@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatMoney, formatDay, formatDate } from "@/lib/format";
+import { formatMoney, formatDay, formatDate, amountClass } from "@/lib/format";
 
 type DayRow = {
   day: string;
@@ -111,17 +111,7 @@ function DayModal({ day, onClose }: { day: string; onClose: () => void }) {
                   </p>
                   <p className="text-xs text-[var(--muted)]">{formatDate(t.created_at)}</p>
                 </div>
-                <span
-                  className={`font-medium ${
-                    t.type === "sale" || t.type === "cost"
-                      ? "text-amber-600"
-                      : t.type === "contra"
-                      ? "text-red-500"
-                      : "text-emerald-600"
-                  }`}
-                >
-                  {formatMoney(t.amount)}
-                </span>
+                <span className={`font-medium ${amountClass(t.type)}`}>{formatMoney(t.amount)}</span>
               </li>
             ))}
           </ul>

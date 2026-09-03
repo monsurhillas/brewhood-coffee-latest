@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import EmployeePicker, { EmployeeOption } from "@/components/dashboard/EmployeePicker";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, balanceClass, amountClass } from "@/lib/format";
 
 type Employee = {
   id: number;
@@ -38,16 +38,9 @@ type LedgerResponse = {
   transactions: Transaction[];
 };
 
-function balanceClass(balance: number): string {
-  if (balance < 0) return "text-red-500";
-  if (balance > 0) return "text-emerald-600";
-  return "text-[var(--muted)]";
-}
-
 function typeBadgeClass(type: Transaction["type"]): string {
-  if (type === "sale") return "bg-[var(--brand)]/15 text-[var(--brand)]";
-  if (type === "contra") return "bg-amber-500/15 text-amber-600";
-  return "bg-emerald-500/15 text-emerald-600";
+  if (type === "collection") return "bg-emerald-500/15 text-emerald-600";
+  return "bg-red-500/15 text-red-500";
 }
 
 export default function EmployeeLedgerTab() {
@@ -57,6 +50,19 @@ export default function EmployeeLedgerTab() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function copyShareLink() {
+    if (!employee) return;
+    const url = `${window.location.origin}/e/${employee.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link to share with the employee:", url);
+    }
+  }
 
   // No separate "loading" flag: data is reset to null (and error cleared)
   // the moment a new employee is picked (see EmployeePicker's onSelect
@@ -138,6 +144,20 @@ export default function EmployeeLedgerTab() {
               valueClassName={balanceClass(data.currentBalance)}
               sub={data.currentBalance < 0 ? "Owes the shop" : data.currentBalance > 0 ? "Shop owes employee" : "Settled"}
             />
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <p className="text-xs text-[var(--muted)]">
+              Share {data.employee.name}&apos;s own link so they can check their balance and pay directly — no login
+              needed.
+            </p>
+            <button
+              type="button"
+              onClick={copyShareLink}
+              className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            >
+              {copied ? "Link copied ✓" : "Copy share link"}
+            </button>
           </div>
 
           {data.totals.preImportCount > 0 && (
@@ -237,7 +257,7 @@ export default function EmployeeLedgerTab() {
                         ? `${t.description} × ${t.quantity} @ ${formatMoney(t.unit_price ?? 0)}`
                         : `${(t.method ?? "").toUpperCase()}${t.type === "contra" ? " (reversal)" : ""}`}
                     </td>
-                    <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${t.type === "sale" ? "" : t.type === "contra" ? "text-amber-600" : "text-emerald-600"}`}>
+                    <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${amountClass(t.type)}`}>
                       {t.type === "sale" ? "-" : t.type === "contra" ? "-" : "+"}
                       {formatMoney(t.amount)}
                     </td>
