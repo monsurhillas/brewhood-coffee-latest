@@ -52,6 +52,12 @@ export default function EmployeeLedgerTab() {
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // The link is always shown in a plain, selectable field below (see
+  // render) so sharing it never depends on the Clipboard API working —
+  // some browsers restrict or silently hang navigator.clipboard.writeText
+  // outside a few narrow conditions. This button is just a convenience on
+  // top of that: try to copy, and if it doesn't resolve, do nothing
+  // disruptive (no blocking window.prompt) since the field is right there.
   async function copyShareLink() {
     if (!employee) return;
     const url = `${window.location.origin}/e/${employee.id}`;
@@ -60,7 +66,7 @@ export default function EmployeeLedgerTab() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copy this link to share with the employee:", url);
+      // Clipboard write unavailable — the visible link field is the fallback.
     }
   }
 
@@ -146,18 +152,27 @@ export default function EmployeeLedgerTab() {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-            <p className="text-xs text-[var(--muted)]">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+            <p className="mb-2 text-xs text-[var(--muted)]">
               Share {data.employee.name}&apos;s own link so they can check their balance and pay directly — no login
               needed.
             </p>
-            <button
-              type="button"
-              onClick={copyShareLink}
-              className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
-            >
-              {copied ? "Link copied ✓" : "Copy share link"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={typeof window !== "undefined" ? `${window.location.origin}/e/${data.employee.id}` : ""}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-transparent px-3 py-1.5 text-xs outline-none focus:border-[var(--brand)]"
+              />
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                {copied ? "Link copied ✓" : "Copy"}
+              </button>
+            </div>
           </div>
 
           {data.totals.preImportCount > 0 && (
