@@ -60,6 +60,11 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
   }, [employeeId]);
 
   const owesMoney = Boolean(data && data.currentBalance < 0);
+  // Keep this simple for an employee checking their own balance: only the
+  // most recent 10 entries, and skip pre-import rows entirely (those are
+  // an accounting-import detail the manager's own ledger view explains —
+  // not something an employee needs to reason about).
+  const recentTransactions = data ? data.transactions.filter((t) => t.counted).slice(0, 10) : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)]">
@@ -139,12 +144,12 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-right">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Sales</p>
-                    <p className="text-sm font-medium">{formatMoney(data.totals.sales)}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Inflow</p>
+                    <p className="text-sm font-medium text-emerald-600">{formatMoney(data.totals.collected)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Collected</p>
-                    <p className="text-sm font-medium">{formatMoney(data.totals.collected)}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Outflow</p>
+                    <p className="text-sm font-medium text-red-500">{formatMoney(data.totals.sales)}</p>
                   </div>
                 </div>
               </div>
@@ -159,25 +164,16 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
               )}
             </div>
 
-            {data.totals.preImportCount > 0 && (
-              <p className="mt-3 text-xs text-[var(--muted)]">
-                {data.totals.preImportCount} of {data.totals.transactionCount} entries below are dated before your
-                opening balance was struck — they&apos;re already reflected in it, so they&apos;re shown for the
-                record but don&apos;t move the running balance (marked <span className="italic">pre-import</span>{" "}
-                below).
-              </p>
-            )}
-
             <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Full Transaction History
+              Recent Transactions (Last 10)
             </h3>
 
-            {data.transactions.length === 0 ? (
+            {recentTransactions.length === 0 ? (
               <p className="py-6 text-center text-sm text-[var(--muted)]">No transactions yet.</p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
                 <ul className="divide-y divide-[var(--border)]">
-                  {data.transactions.map((t) => (
+                  {recentTransactions.map((t) => (
                     <li key={`${t.type}-${t.id}`} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                       <div className="min-w-0">
                         <p className="truncate font-medium">
@@ -185,10 +181,7 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                             ? `${t.description} × ${t.quantity} @ ${formatMoney(t.unit_price ?? 0)}`
                             : `${(t.method ?? "").toUpperCase()}${t.type === "contra" ? " (reversal)" : ""}`}
                         </p>
-                        <p className="text-xs text-[var(--muted)]">
-                          {formatDate(t.date)}
-                          {!t.counted && <span className="italic"> · pre-import</span>}
-                        </p>
+                        <p className="text-xs text-[var(--muted)]">{formatDate(t.date)}</p>
                       </div>
                       <span className={`shrink-0 font-medium ${amountClass(t.type)}`}>
                         {t.type === "collection" ? "+" : "−"}
