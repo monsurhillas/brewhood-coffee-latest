@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { formatMoney, formatDate, formatRelativeTime } from "@/lib/format";
+import { formatMoney, formatDate, formatRelativeTime, balanceClass, amountClass } from "@/lib/format";
 import ThemeToggle from "@/components/ThemeToggle";
+import ScanToPayModal from "@/components/ledger/ScanToPayModal";
 
 type Employee = {
   id: number;
@@ -45,18 +46,6 @@ const FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "All Employees" },
   { key: "active_today", label: "Active Today" },
 ];
-
-function balanceClass(balance: number): string {
-  if (balance < 0) return "text-red-500";
-  if (balance > 0) return "text-emerald-600";
-  return "text-[var(--muted)]";
-}
-
-const BKASH_NUMBER = "01744337974";
-
-function paymentReference(employee: Employee): string {
-  return `${employee.name} (${employee.employee_id})`;
-}
 
 export default function LedgerHome() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -251,8 +240,6 @@ function ActivityFeed() {
 
   useEffect(() => {
     let cancelled = false;
-    setItems(null);
-    setError(null);
     fetch("/api/activity")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load activity.");
@@ -347,6 +334,13 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
           </button>
         </div>
 
+        <Link
+          href={`/e/${employee.id}`}
+          className="mb-4 inline-block text-xs font-medium text-[var(--brand)] hover:underline"
+        >
+          Open my personal ledger link →
+        </Link>
+
         {owesMoney && (
           <button
             onClick={() => setShowPay(true)}
@@ -372,11 +366,7 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
                   <p className="font-medium">{t.description}</p>
                   <p className="text-xs text-[var(--muted)]">{formatDate(t.created_at)}</p>
                 </div>
-                <span
-                  className={`font-medium ${
-                    t.type === "sale" ? "text-amber-600" : t.type === "contra" ? "text-red-500" : "text-emerald-600"
-                  }`}
-                >
+                <span className={`font-medium ${amountClass(t.type)}`}>
                   {t.type === "collection" ? "+" : "−"}
                   {formatMoney(t.amount)}
                 </span>
@@ -387,53 +377,6 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
       </div>
 
       {showPay && <ScanToPayModal employee={employee} onClose={() => setShowPay(false)} />}
-    </div>
-  );
-}
-
-function ScanToPayModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
-  const due = -employee.balance;
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-t-2xl bg-[var(--card)] p-6 text-center sm:rounded-2xl"
-      >
-        <div className="mb-4 flex items-start justify-between text-left">
-          <div>
-            <h2 className="text-base font-semibold">{employee.name}</h2>
-            <p className="text-xs text-[var(--muted)]">
-              Amount due <span className="font-semibold text-red-500">{formatMoney(due)}</span>
-            </p>
-          </div>
-          <button onClick={onClose} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">
-            Close
-          </button>
-        </div>
-
-        <img
-          src="/bkash-qr.png"
-          alt="bKash QR code — scan to pay BrewHood Coffee"
-          className="mx-auto w-full max-w-[240px] rounded-xl border border-[var(--border)]"
-        />
-
-        <p className="mt-3 text-xs text-[var(--muted)]">
-          Scan with the bKash app, or Send Money to{" "}
-          <span className="font-semibold text-[var(--foreground)]">{BKASH_NUMBER}</span>
-        </p>
-
-        <div className="mt-4 rounded-lg border border-dashed border-[var(--border)] bg-black/5 px-3 py-2 text-left dark:bg-white/5">
-          <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Reference — please include</p>
-          <p className="text-sm font-medium">{paymentReference(employee)}</p>
-        </div>
-      </div>
     </div>
   );
 }
