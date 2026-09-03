@@ -34,3 +34,20 @@ export function formatDay(value: string | Date): string {
   const d = typeof value === "string" ? new Date(value) : value;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+
+// Single source of truth for the app's money-color convention, so it can't
+// drift between screens again: balance > 0 means the shop owes the
+// employee (an advance/credit) and is green; balance < 0 means the
+// employee owes the shop (outstanding/due) and is red.
+export function balanceClass(balance: number): string {
+  if (balance < 0) return "text-red-500";
+  if (balance > 0) return "text-emerald-600";
+  return "text-[var(--muted)]";
+}
+
+// Same convention applied to individual transactions: a collection is
+// money coming in (green); a sale, a manager cost, or a contra correction
+// (which reverses a mistaken collection) all point the other way (red).
+export function amountClass(type: string): string {
+  return type === "collection" ? "text-emerald-600" : "text-red-500";
+}
