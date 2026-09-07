@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("invoices");
+  if (response) return response;
   const db = sql();
   const rows = await db`
     SELECT i.id, i.invoice_number, i.invoice_date, i.due_date, i.subtotal::float8, i.total::float8,
@@ -24,10 +22,8 @@ export async function GET() {
 type ItemInput = { description: string; quantity: number; total: number };
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("invoices");
+  if (response) return response;
 
   const body = await request.json().catch(() => null);
   const employeeId = Number(body?.employee_id);
