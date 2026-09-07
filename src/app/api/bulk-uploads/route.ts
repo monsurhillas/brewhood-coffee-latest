@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql, ensureUploadedAtColumn, BULK_EDIT_WINDOW_DAYS, BULK_UPLOAD_NOTE } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +10,8 @@ export const dynamic = "force-dynamic";
 // still in the normal ledger/reports, just no longer editable). Ordered by
 // uploaded_at ascending, so the entries closest to locking show first.
 export async function GET() {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("bulk");
+  if (response) return response;
 
   await ensureUploadedAtColumn();
   const db = sql();
