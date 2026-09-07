@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 import { generateInvoicePdf, InvoiceItem } from "@/lib/invoicePdf";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +11,8 @@ function formatLongDate(value: string | Date): string {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("invoices");
+  if (response) return response;
 
   const { id } = await params;
   const invoiceId = Number(id);
