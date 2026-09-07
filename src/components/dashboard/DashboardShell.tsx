@@ -13,6 +13,7 @@ import SkusTab from "@/components/dashboard/tabs/SkusTab";
 import BulkUploadTab from "@/components/dashboard/tabs/BulkUploadTab";
 import InvoiceTab from "@/components/dashboard/tabs/InvoiceTab";
 import EmployeeLedgerTab from "@/components/dashboard/tabs/EmployeeLedgerTab";
+import AdminTab from "@/components/dashboard/tabs/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import { formatMoney } from "@/lib/format";
 
@@ -27,6 +28,10 @@ const TABS = [
   { key: "reports", label: "Day-wise Reports" },
   { key: "download", label: "Download Reports" },
   { key: "skus", label: "SKUs" },
+  // Not in adminUsers.TAB_KEYS on purpose — it's never one of the tabs a
+  // super admin can hand out. Only isSuperAdmin below decides whether this
+  // shows up at all.
+  { key: "admin", label: "Admin" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -38,8 +43,22 @@ type Summary = {
   activeEmployeeCount: number;
 };
 
-export default function DashboardShell({ managerName }: { managerName: string }) {
-  const [tab, setTab] = useState<TabKey>("sale");
+export default function DashboardShell({
+  managerName,
+  isSuperAdmin,
+  allowedTabs,
+}: {
+  managerName: string;
+  isSuperAdmin: boolean;
+  allowedTabs: string[];
+}) {
+  const visibleTabs = TABS.filter((t) => {
+    if (t.key === "admin") return isSuperAdmin;
+    return isSuperAdmin || allowedTabs.includes(t.key);
+  });
+  const canExportReports = isSuperAdmin || allowedTabs.includes("reports") || allowedTabs.includes("download");
+
+  const [tab, setTab] = useState<TabKey>(visibleTabs[0]?.key ?? "sale");
   const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -77,18 +96,22 @@ export default function DashboardShell({ managerName }: { managerName: string })
             >
               Public Ledger
             </Link>
-            <button
-              onClick={() => setAddEmployeeOpen(true)}
-              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
-            >
-              Add Employee
-            </button>
-            <a
-              href="/api/reports/export?type=employees"
-              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
-            >
-              Export CSV
-            </a>
+            {visibleTabs.length > 0 && (
+              <button
+                onClick={() => setAddEmployeeOpen(true)}
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                Add Employee
+              </button>
+            )}
+            {canExportReports && (
+              <a
+                href="/api/reports/export?type=employees"
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                Export CSV
+              </a>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
               className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
@@ -111,7 +134,7 @@ export default function DashboardShell({ managerName }: { managerName: string })
           />
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6 pb-2">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -128,6 +151,11 @@ export default function DashboardShell({ managerName }: { managerName: string })
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-6">
+        {visibleTabs.length === 0 && (
+          <p className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 text-center text-sm text-[var(--muted)]">
+            You don&apos;t have access to any section yet. Ask your admin to grant you a tab.
+          </p>
+        )}
         {tab === "sale" && <SaleEntryTab onSaved={bumpRefresh} />}
         {tab === "collection" && <CollectionEntryTab onSaved={bumpRefresh} />}
         {tab === "cost" && <ManagerCostTab onSaved={bumpRefresh} />}
@@ -138,6 +166,7 @@ export default function DashboardShell({ managerName }: { managerName: string })
         {tab === "reports" && <ReportsTab />}
         {tab === "download" && <DownloadReportsPanel />}
         {tab === "skus" && <SkusTab />}
+        {tab === "admin" && <AdminTab />}
       </main>
 
       {addEmployeeOpen && (
