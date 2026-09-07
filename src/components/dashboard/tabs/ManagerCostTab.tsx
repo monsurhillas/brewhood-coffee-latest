@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ThemedSelect from "@/components/dashboard/ThemedSelect";
+import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type CostRow = { id: number; category: string; amount: number; note: string | null; created_at: string };
@@ -13,7 +14,7 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<CostRow[]>([]);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!amount) {
-      setMessage("Enter an amount.");
+      setMessage({ type: "error", text: "Enter an amount." });
       return;
     }
     setSaving(true);
@@ -42,14 +43,14 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
     setSaving(false);
 
     if (res.ok) {
-      setMessage("Cost recorded.");
+      setMessage({ type: "success", text: "Cost recorded." });
       setAmount("");
       setNote("");
       loadRecent();
       onSaved();
     } else {
       const data = await res.json().catch(() => ({}));
-      setMessage(data.error ?? "Failed to save.");
+      setMessage({ type: "error", text: data.error ?? "Failed to save." });
     }
   }
 
@@ -91,7 +92,7 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
           />
         </div>
 
-        {message && <p className="text-sm text-[var(--brand)]">{message}</p>}
+        <FormMessage message={message} />
 
         <button
           type="submit"
@@ -104,29 +105,51 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Recent Costs</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
-                <th className="pb-2">Category</th>
-                <th className="pb-2">Note</th>
-                <th className="pb-2 text-right">Amount</th>
-                <th className="pb-2 text-right">When</th>
-              </tr>
-            </thead>
-            <tbody>
+        {recent.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No costs logged yet.</p>
+        ) : (
+          <>
+            <ul className="flex flex-col gap-2 sm:hidden">
               {recent.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
-                  <td className="py-2">{r.category}</td>
-                  <td className="py-2 text-[var(--muted)]">{r.note ?? "—"}</td>
-                  <td className="py-2 text-right">{formatMoney(r.amount)}</td>
-                  <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
-                </tr>
+                <li
+                  key={r.id}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate font-medium">{r.category}</p>
+                    <p className="shrink-0 font-medium">{formatMoney(r.amount)}</p>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--muted)]">
+                    <p className="truncate">{r.note ?? "—"}</p>
+                    <p>{formatDate(r.created_at)}</p>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
-          {recent.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No costs logged yet.</p>}
-        </div>
+            </ul>
+            <div className="scroll-fade-x hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
+                    <th className="pb-2">Category</th>
+                    <th className="pb-2">Note</th>
+                    <th className="pb-2 text-right">Amount</th>
+                    <th className="pb-2 text-right">When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((r) => (
+                    <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-2">{r.category}</td>
+                      <td className="py-2 text-[var(--muted)]">{r.note ?? "—"}</td>
+                      <td className="py-2 text-right">{formatMoney(r.amount)}</td>
+                      <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

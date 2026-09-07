@@ -231,7 +231,7 @@ export default function EmployeeLedgerTab() {
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--card)]">
+          <div className="scroll-fade-x overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--card)]">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">

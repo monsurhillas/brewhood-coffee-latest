@@ -222,7 +222,7 @@ export default function AnalyticsTab() {
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Employee Activity</h2>
-        <div className="overflow-x-auto">
+        <div className="scroll-fade-x overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">

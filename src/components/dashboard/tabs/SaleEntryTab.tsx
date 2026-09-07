@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import EmployeePicker, { EmployeeOption } from "@/components/dashboard/EmployeePicker";
 import ThemedSelect from "@/components/dashboard/ThemedSelect";
+import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type Sku = { id: number; name: string; price: string; active: boolean };
@@ -25,7 +26,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
   const [unitPrice, setUnitPrice] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<SaleRow[]>([]);
 
   useEffect(() => {
@@ -50,12 +51,12 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!employee) {
-      setMessage("Pick an employee first.");
+      setMessage({ type: "error", text: "Pick an employee first." });
       return;
     }
     const sku = skus.find((s) => String(s.id) === skuId);
     if (!sku && !unitPrice) {
-      setMessage("Pick an item or enter a unit price.");
+      setMessage({ type: "error", text: "Pick an item or enter a unit price." });
       return;
     }
 
@@ -76,7 +77,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
     setSaving(false);
 
     if (res.ok) {
-      setMessage("Sale recorded.");
+      setMessage({ type: "success", text: "Sale recorded." });
       setEmployee(null);
       setSkuId("");
       setUnitPrice("");
@@ -86,7 +87,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
       onSaved();
     } else {
       const data = await res.json().catch(() => ({}));
-      setMessage(data.error ?? "Failed to record sale.");
+      setMessage({ type: "error", text: data.error ?? "Failed to record sale." });
     }
   }
 
@@ -159,7 +160,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
           />
         </div>
 
-        {message && <p className="text-sm text-[var(--brand)]">{message}</p>}
+        <FormMessage message={message} />
 
         <button
           type="submit"
@@ -172,31 +173,59 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Recent Sales</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
-                <th className="pb-2">Employee</th>
-                <th className="pb-2">Item</th>
-                <th className="pb-2">Qty</th>
-                <th className="pb-2 text-right">Total</th>
-                <th className="pb-2 text-right">When</th>
-              </tr>
-            </thead>
-            <tbody>
+        {recent.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No sales yet.</p>
+        ) : (
+          <>
+            {/* Below sm, a table this wide has to scroll to be read at all —
+                on a phone that reads as "the box is cut off". A stacked card
+                per row needs no horizontal scroll, so it replaces the table
+                entirely on narrow screens; the table returns at sm and up. */}
+            <ul className="flex flex-col gap-2 sm:hidden">
               {recent.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
-                  <td className="py-2">{r.employee_name}</td>
-                  <td className="py-2">{r.sku_name}</td>
-                  <td className="py-2">{r.quantity}</td>
-                  <td className="py-2 text-right">{formatMoney(r.total)}</td>
-                  <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
-                </tr>
+                <li
+                  key={r.id}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate font-medium">{r.sku_name}</p>
+                    <p className="shrink-0 font-medium">{formatMoney(r.total)}</p>
+                  </div>
+                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--muted)]">
+                    <p className="truncate">
+                      {r.employee_name} · Qty {r.quantity}
+                    </p>
+                    <p>{formatDate(r.created_at)}</p>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
-          {recent.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No sales yet.</p>}
-        </div>
+            </ul>
+            <div className="scroll-fade-x hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[480px] text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
+                    <th className="pb-2">Employee</th>
+                    <th className="pb-2">Item</th>
+                    <th className="pb-2">Qty</th>
+                    <th className="pb-2 text-right">Total</th>
+                    <th className="pb-2 text-right">When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((r) => (
+                    <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-2">{r.employee_name}</td>
+                      <td className="py-2">{r.sku_name}</td>
+                      <td className="py-2">{r.quantity}</td>
+                      <td className="py-2 text-right">{formatMoney(r.total)}</td>
+                      <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

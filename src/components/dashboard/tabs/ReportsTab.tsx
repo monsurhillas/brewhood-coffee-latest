@@ -41,7 +41,7 @@ export default function ReportsTab() {
       ) : days.length === 0 ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">No activity recorded yet.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="scroll-fade-x overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">

@@ -168,7 +168,7 @@ export default function SkusTab() {
         <h2 className="mb-3 font-medium">Menu / SKUs</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">Click a price to edit it.</p>
         {priceError && <p className="mb-3 text-sm text-red-500">{priceError}</p>}
-        <div className="overflow-x-auto">
+        <div className="scroll-fade-x overflow-x-auto">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
