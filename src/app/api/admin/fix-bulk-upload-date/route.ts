@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireSuperAdmin } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +11,8 @@ export const dynamic = "force-dynamic";
 // time-of-day (and therefore relative insert order) is preserved. Nothing
 // entered through Sale Entry or Bulk Upload on any other day is affected.
 export async function POST(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireSuperAdmin();
+  if (response) return response;
 
   const body = await request.json().catch(() => ({}));
   const from: string | undefined = body?.from;
