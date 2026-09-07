@@ -317,6 +317,7 @@ function DownloadReportsPanel() {
   const types: { key: string; label: string; desc: string; dateScoped: boolean }[] = [
     { key: "sales", label: "Sales Report", desc: "Every sale entry with employee, item, quantity, and total.", dateScoped: true },
     { key: "collections", label: "Collections Report", desc: "Every collection and contra entry.", dateScoped: true },
+    { key: "sales_collections", label: "Combined Sales + Collections", desc: "Sales and collections merged into one chronological log — handy for reconciling a day in a single file.", dateScoped: true },
     { key: "costs", label: "Manager Costs Report", desc: "All manager-logged cost entries.", dateScoped: true },
     { key: "employees", label: "Employees Report", desc: "Employee directory with running balances.", dateScoped: false },
   ];
