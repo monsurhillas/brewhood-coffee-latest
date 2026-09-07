@@ -6,6 +6,22 @@ export const SCHEMA_STATEMENTS = [
     name TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
   )`,
+  // Google-account allowlist for the manager dashboard. is_super_admin
+  // bypasses allowed_tabs entirely (full access to every tab, including
+  // Admin); everyone else only sees/uses the tabs listed in allowed_tabs.
+  // The legacy manager_users credentials login (above) is a temporary
+  // fallback and is NOT allowlist-checked — see lib/auth.ts.
+  `CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    is_super_admin BOOLEAN NOT NULL DEFAULT false,
+    allowed_tabs JSONB NOT NULL DEFAULT '[]'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    created_by TEXT,
+    last_login_at TIMESTAMPTZ
+  )`,
   `CREATE TABLE IF NOT EXISTS employees (
     id SERIAL PRIMARY KEY,
     employee_id TEXT UNIQUE NOT NULL,
