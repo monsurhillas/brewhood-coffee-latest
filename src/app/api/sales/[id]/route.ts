@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, ensureUploadedAtColumn, BULK_EDIT_WINDOW_DAYS, BULK_UPLOAD_NOTE } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +15,8 @@ function locked(message: string) {
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("bulk");
+  if (response) return response;
 
   const { id: idParam } = await params;
   const id = Number(idParam);
@@ -90,10 +88,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE() {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("bulk");
+  if (response) return response;
   return NextResponse.json(
     { error: "Deleting sales is disabled to keep the financial history intact." },
     { status: 405 }
