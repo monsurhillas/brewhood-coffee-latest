@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 import { bestMatch } from "@/lib/similarity";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +26,8 @@ type ExtractedRow = {
 };
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("bulk");
+  if (response) return response;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
