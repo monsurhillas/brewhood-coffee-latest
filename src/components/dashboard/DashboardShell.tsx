@@ -106,7 +106,7 @@ export default function DashboardShell({
   const activeTabMeta = visibleTabs.find((t) => t.key === tab);
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
+    <div className="flex min-h-screen overflow-x-hidden bg-[var(--background)]">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
@@ -115,8 +115,11 @@ export default function DashboardShell({
         />
       )}
 
+      {/* Pinned on desktop (fixed, not part of the scrolling flow) so it
+          stays put while the main column scrolls; on mobile it's the same
+          fixed element sliding in/out as a drawer. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[var(--border)] bg-[var(--card)] transition-transform duration-200 ease-out md:static md:z-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[var(--border)] bg-[var(--card)] transition-transform duration-200 ease-out md:z-30 md:translate-x-0 ${
           sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         }`}
       >
@@ -198,7 +201,7 @@ export default function DashboardShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:ml-72">
         <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--card)]/90 px-4 py-3 backdrop-blur md:px-8">
           <button
             type="button"
