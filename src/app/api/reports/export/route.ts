@@ -5,7 +5,7 @@ import { toCsv } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = ["sales", "collections", "costs", "employees"] as const;
+const TYPES = ["sales", "collections", "costs", "sales_collections", "employees"] as const;
 type ReportType = (typeof TYPES)[number];
 
 export async function GET(request: NextRequest) {
@@ -85,6 +85,40 @@ export async function GET(request: NextRequest) {
       rows.map((r) => [
         new Date(r.created_at as string).toISOString(),
         r.category as string,
+        r.amount as number,
+        (r.note as string) ?? "",
+      ])
+    );
+  } else if (type === "sales_collections") {
+    // A single combined, chronologically-ordered log of sales and
+    // collections (contra entries included) — handy when you want one file
+    // to reconcile the day instead of stitching two reports together.
+    const rows = await db`
+      SELECT * FROM (
+        SELECT sa.created_at, 'Sale' AS type, e.employee_id, e.name,
+               sa.sku_name AS description, sa.quantity::text AS qty, sa.total::float8 AS amount, sa.note
+        FROM sales sa JOIN employees e ON e.id = sa.employee_id
+        WHERE (${fromTs}::timestamptz IS NULL OR sa.created_at >= ${fromTs}::timestamptz)
+          AND (${toTs}::timestamptz IS NULL OR sa.created_at <= ${toTs}::timestamptz)
+        UNION ALL
+        SELECT c.created_at, CASE WHEN c.is_contra THEN 'Contra' ELSE 'Collection' END AS type,
+               e.employee_id, e.name, UPPER(c.method) AS description, NULL::text AS qty,
+               c.amount::float8 AS amount, c.note
+        FROM collections c JOIN employees e ON e.id = c.employee_id
+        WHERE (${fromTs}::timestamptz IS NULL OR c.created_at >= ${fromTs}::timestamptz)
+          AND (${toTs}::timestamptz IS NULL OR c.created_at <= ${toTs}::timestamptz)
+      ) combined
+      ORDER BY created_at DESC
+    `;
+    csv = toCsv(
+      ["Date", "Type", "Employee ID", "Employee", "Description", "Qty", "Amount", "Note"],
+      rows.map((r) => [
+        new Date(r.created_at as string).toISOString(),
+        r.type as string,
+        r.employee_id as string,
+        r.name as string,
+        r.description as string,
+        (r.qty as string) ?? "",
         r.amount as number,
         (r.note as string) ?? "",
       ])
