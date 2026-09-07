@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, ensureUploadedAtColumn, BULK_UPLOAD_NOTE } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +19,8 @@ type CollectionInput = {
 };
 
 export async function POST(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("bulk");
+  if (response) return response;
 
   const body = await request.json().catch(() => null);
   const date: string | undefined = body?.date;
