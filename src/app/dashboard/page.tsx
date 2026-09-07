@@ -8,5 +8,11 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  return <DashboardShell managerName={session.user?.name ?? "Manager"} />;
+  return (
+    <DashboardShell
+      managerName={session.user?.name ?? "Manager"}
+      isSuperAdmin={Boolean(session.user?.isSuperAdmin)}
+      allowedTabs={session.user?.allowedTabs ?? []}
+    />
+  );
 }
