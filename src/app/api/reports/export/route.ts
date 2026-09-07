@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 import { toCsv } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
@@ -9,10 +9,8 @@ const TYPES = ["sales", "collections", "costs", "employees"] as const;
 type ReportType = (typeof TYPES)[number];
 
 export async function GET(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab(["reports", "download"]);
+  if (response) return response;
 
   const type = request.nextUrl.searchParams.get("type") as ReportType | null;
   if (!type || !TYPES.includes(type)) {
