@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("collection");
+  if (response) return response;
   const db = sql();
   const rows = await db`
     SELECT c.id, c.amount::float8, c.method, c.is_contra, c.note, c.created_at,
@@ -26,10 +24,8 @@ export async function GET() {
 // collection, so they add back to the employee's outstanding balance
 // instead of reducing it.
 export async function POST(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("collection");
+  if (response) return response;
 
   const body = await request.json().catch(() => null);
   const employeeId = Number(body?.employee_id);
