@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 // Powers the Invoices tab's preview: given a customer (employee) and a day,
 // return every sale so the manager can pick which ones go on the invoice.
 export async function GET(request: NextRequest) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("invoices");
+  if (response) return response;
 
   const employeeId = Number(request.nextUrl.searchParams.get("employee_id"));
   const date = request.nextUrl.searchParams.get("date");
