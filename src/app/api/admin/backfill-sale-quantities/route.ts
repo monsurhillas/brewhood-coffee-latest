@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireSession } from "@/lib/session";
+import { requireSuperAdmin } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +18,8 @@ export const dynamic = "force-dynamic";
 // changed) or whose SKU was never matched are left untouched and reported
 // back for manual review.
 export async function POST() {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireSuperAdmin();
+  if (response) return response;
 
   const db = sql();
 
