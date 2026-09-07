@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEmployeeLedger } from "@/lib/ledger";
-import { requireSession } from "@/lib/session";
+import { requireTab } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +19,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { response } = await requireTab("ledger");
+  if (response) return response;
 
   const { id } = await params;
   const employeeId = Number(id);
