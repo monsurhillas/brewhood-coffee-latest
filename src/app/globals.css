@@ -142,3 +142,21 @@ table {
 table tbody tr:hover {
   background: color-mix(in srgb, var(--brand) 6%, transparent);
 }
+
+/* Soft edge fade on horizontally scrollable tables/strips. The fade only
+   shows on the side that still has hidden content — it disappears at each
+   end of the scroll range — so a table that needs a sideways swipe reads as
+   "scrollable" instead of "cut off". Pure CSS: the two `local`-attached
+   layers ride along with the content and cover the fade once you reach an
+   edge, while the two `scroll`-attached layers stay pinned to the viewport. */
+.scroll-fade-x {
+  background:
+    linear-gradient(to right, var(--card) 30%, transparent),
+    linear-gradient(to left, var(--card) 30%, transparent) 100% 0,
+    linear-gradient(to right, rgba(0, 0, 0, 0.16), transparent),
+    linear-gradient(to left, rgba(0, 0, 0, 0.16), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-color: var(--card);
+  background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
