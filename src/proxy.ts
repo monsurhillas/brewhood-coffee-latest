@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { isSessionExpired } from "@/lib/sessionPolicy";
 
 const PROTECTED_API_PREFIXES = [
   "/api/employees/import",
@@ -39,16 +40,26 @@ export async function proxy(request: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (token) {
+  // `loginTime` is stamped into the token once at sign-in (see
+  // src/lib/auth.ts) and never refreshed, so this catches a session that's
+  // outlived its fixed lifetime even though the JWT itself hasn't expired
+  // yet (NextAuth's own session.maxAge slides forward on every request).
+  const expired = !token || isSessionExpired(token.loginTime);
+
+  if (!expired) {
     return NextResponse.next();
   }
 
   if (isProtectedApi) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: token ? "Your session has expired. Please sign in again." : "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("from", pathname);
+  if (token) loginUrl.searchParams.set("error", "SessionExpired");
   return NextResponse.redirect(loginUrl);
 }
 
