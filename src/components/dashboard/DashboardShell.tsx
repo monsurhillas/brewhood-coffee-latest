@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
 import SaleEntryTab from "@/components/dashboard/tabs/SaleEntryTab";
@@ -69,6 +70,22 @@ export default function DashboardShell({
     setTab(key);
     setSidebarOpen(false);
   };
+
+  // Auto-logout: sessions have a fixed lifetime (see src/lib/sessionPolicy.ts)
+  // regardless of activity, enforced server-side in src/lib/auth.ts and
+  // src/proxy.ts. Providers.tsx polls the session every 5 minutes so a tab
+  // left open all shift notices the cutoff on its own; once that poll comes
+  // back "unauthenticated" (session expired, not "never logged in" — this
+  // component only renders after the server already confirmed a session),
+  // send the manager back to the login page instead of leaving them staring
+  // at a dashboard where every action will now silently 401.
+  const router = useRouter();
+  const { status } = useSession();
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login?error=SessionExpired");
+    }
+  }, [status, router]);
 
   useEffect(() => {
     let cancelled = false;
