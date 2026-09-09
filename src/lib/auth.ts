@@ -4,6 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
 import { TAB_KEYS, getAdminUserByEmail, touchLastLogin, type TabKey } from "@/lib/adminUsers";
+import { SESSION_MAX_AGE_SECONDS, isSessionExpired } from "@/lib/sessionPolicy";
 
 // Google sign-in is checked against the admin_users allowlist (Admin tab).
 // The username/password provider below is a temporary rollout fallback —
@@ -12,7 +13,12 @@ import { TAB_KEYS, getAdminUserByEmail, touchLastLogin, type TabKey } from "@/li
 export const authOptions: AuthOptions = {
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 12, // 12 hours
+    // The actual fixed-length cutoff (regardless of activity) is enforced
+    // below in the jwt/session callbacks and in src/proxy.ts, via
+    // sessionPolicy.ts's isSessionExpired(). This just keeps the cookie's
+    // own natural expiry in step with that so it isn't a separate, longer
+    // number a future reader has to reconcile.
+    maxAge: SESSION_MAX_AGE_SECONDS,
   },
   pages: {
     signIn: "/login",
@@ -76,6 +82,10 @@ export const authOptions: AuthOptions = {
       if (user) {
         token.username = (user as { username?: string }).username;
         token.authMethod = account?.provider === "google" ? "google" : "credentials";
+        // Stamped once, at sign-in, and never touched again — this is what
+        // lets isSessionExpired() below tell "8 hours since you signed in"
+        // apart from "8 hours since your last click".
+        token.loginTime = Date.now();
       }
       return token;
     },
@@ -85,6 +95,21 @@ export const authOptions: AuthOptions = {
     // waiting up to 12 hours for their token to expire.
     async session({ session, token }) {
       if (!session.user) return session;
+
+      if (isSessionExpired(token.loginTime)) {
+        // Force a real sign-out instead of letting NextAuth's sliding
+        // session.maxAge quietly extend an active user's session forever
+        // (routes/session.js re-issues the cookie with a fresh maxAge on
+        // every check — page load, tab focus, the periodic client poll).
+        // Throwing here hits the exact try/catch NextAuth itself uses to
+        // recover from a corrupt token: it clears the session cookie and
+        // returns an empty body, which getServerSession() (src/lib/session.ts)
+        // turns into `null` — the same "signed out" state as never having
+        // logged in. src/proxy.ts enforces the same cutoff earlier, at the
+        // edge, for the routes it guards; this is the backstop for the rest
+        // (e.g. /api/summary, /api/employees).
+        throw new Error("SessionExpired");
+      }
 
       (session.user as { username?: string }).username = token.username as string | undefined;
       const authMethod = (token.authMethod as "google" | "credentials" | undefined) ?? "credentials";
