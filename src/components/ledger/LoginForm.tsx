@@ -9,6 +9,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   NotAuthorized:
     "That Google account isn't authorized yet. Ask your admin to add your email in the Admin tab.",
   AccessDenied: "Access denied. Ask your admin to add your email in the Admin tab.",
+  SessionExpired: "You've been signed out after 8 hours for security. Please sign in again.",
 };
 
 export default function LoginForm() {
