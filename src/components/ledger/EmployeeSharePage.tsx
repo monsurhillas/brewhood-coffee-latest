@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatMoney, formatDate, balanceClass, amountClass } from "@/lib/format";
+import { drinkTagStyle, type DrinkSlice } from "@/lib/coffeeStats";
 import ThemeToggle from "@/components/ThemeToggle";
 import ScanToPayModal from "@/components/ledger/ScanToPayModal";
+import CoffeeMug from "@/components/ledger/CoffeeMug";
 
 type LedgerEmployee = {
   id: number;
@@ -37,7 +39,15 @@ type LedgerResponse = {
   currentBalance: number;
   totals: { sales: number; collected: number; contra: number; transactionCount: number; preImportCount: number };
   transactions: LedgerTransaction[];
+  drinkBreakdown: DrinkSlice[];
+  favoriteDrink: string | null;
 };
+
+// Keep the mug + legend readable: show each drink that clears its own
+// slice, fold anything past the top few into one "Other" bucket rather than
+// crowding the list (the mug itself still renders every slice's true
+// share — only this text legend is capped).
+const MAX_LEGEND_DRINKS = 4;
 
 export default function EmployeeSharePage({ employeeId }: { employeeId: string }) {
   const [data, setData] = useState<LedgerResponse | null>(null);
@@ -128,18 +138,49 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                 )}
               </div>
 
-              <div className="mt-4">
-                <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Current Balance</p>
-                <p className={`text-2xl font-semibold ${balanceClass(data.currentBalance)}`}>
-                  {formatMoney(data.currentBalance)}
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  {data.currentBalance < 0
-                    ? "You owe the shop"
-                    : data.currentBalance > 0
-                    ? "The shop owes you"
-                    : "Settled up"}
-                </p>
+              {data.favoriteDrink && data.drinkBreakdown[0] && (
+                <span
+                  className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+                  style={drinkTagStyle(data.drinkBreakdown[0].mugColor)}
+                >
+                  ☕ Favourite: {data.favoriteDrink}
+                </span>
+              )}
+
+              <div className="mt-4 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Current Balance</p>
+                  <p className={`text-2xl font-semibold ${balanceClass(data.currentBalance)}`}>
+                    {formatMoney(data.currentBalance)}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {data.currentBalance < 0
+                      ? "You owe the shop"
+                      : data.currentBalance > 0
+                      ? "The shop owes you"
+                      : "Settled up"}
+                  </p>
+                </div>
+
+                {data.drinkBreakdown.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <ul className="flex flex-col items-end gap-1">
+                      {data.drinkBreakdown.slice(0, MAX_LEGEND_DRINKS).map((d) => (
+                        <li key={d.name} className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                          {d.name}
+                          <span className="font-medium text-[var(--foreground)]">{d.pct}%</span>
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: d.mugColor }} />
+                        </li>
+                      ))}
+                      {data.drinkBreakdown.length > MAX_LEGEND_DRINKS && (
+                        <li className="text-xs text-[var(--muted)]">
+                          +{data.drinkBreakdown.length - MAX_LEGEND_DRINKS} more
+                        </li>
+                      )}
+                    </ul>
+                    <CoffeeMug slices={data.drinkBreakdown} />
+                  </div>
+                )}
               </div>
 
               {owesMoney && (
