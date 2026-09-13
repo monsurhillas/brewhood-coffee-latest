@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { computeDrinkBreakdown, type DrinkSlice } from "@/lib/coffeeStats";
 
 // Shared by the manager-facing Employee Ledger tab
 // (/api/employees/[id]/ledger, session-protected) and each employee's own
@@ -65,6 +66,12 @@ export type EmployeeLedger = {
   // happened (or null if it predates the opening balance and so was never
   // applied), so reversing the order doesn't lose that context.
   transactions: LedgerTransaction[];
+  // What this employee actually drinks, by share of counted sales — powers
+  // the share page's coffee-mug visual and "Favourite Drink" tag. Empty
+  // when they have no counted sales yet (e.g. a brand-new employee, or one
+  // whose only activity predates their own created_at).
+  drinkBreakdown: DrinkSlice[];
+  favoriteDrink: string | null;
 };
 
 export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLedger | null> {
@@ -172,6 +179,17 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
     .reduce((sum, t) => sum + t.amount, 0);
   const preImportCount = transactions.filter((t) => !t.counted).length;
 
+  // Same "counted" boundary as the running balance: a pre-import row's
+  // quantity isn't reliable (see admin/backfill-sale-quantities) and
+  // predates this employee's own activity in the app, so it's left out of
+  // the drink breakdown the same way it's left out of "Recent Transactions"
+  // on the share page.
+  const { slices: drinkBreakdown, favorite: favoriteDrink } = computeDrinkBreakdown(
+    transactions
+      .filter((t) => t.type === "sale" && t.counted)
+      .map((t) => ({ description: t.description, quantity: t.quantity }))
+  );
+
   return {
     employee: {
       id: employee.id,
@@ -193,5 +211,7 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
       preImportCount,
     },
     transactions: transactions.slice().reverse(),
+    drinkBreakdown,
+    favoriteDrink,
   };
 }
