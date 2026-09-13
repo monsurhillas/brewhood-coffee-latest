@@ -128,30 +128,18 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                 )}
               </div>
 
-              <div className="mt-4 flex items-end justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Current Balance</p>
-                  <p className={`text-2xl font-semibold ${balanceClass(data.currentBalance)}`}>
-                    {formatMoney(data.currentBalance)}
-                  </p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {data.currentBalance < 0
-                      ? "You owe the shop"
-                      : data.currentBalance > 0
-                      ? "The shop owes you"
-                      : "Settled up"}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-right">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Inflow</p>
-                    <p className="text-sm font-medium text-emerald-600">{formatMoney(data.totals.collected)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total Outflow</p>
-                    <p className="text-sm font-medium text-red-500">{formatMoney(data.totals.sales)}</p>
-                  </div>
-                </div>
+              <div className="mt-4">
+                <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Current Balance</p>
+                <p className={`text-2xl font-semibold ${balanceClass(data.currentBalance)}`}>
+                  {formatMoney(data.currentBalance)}
+                </p>
+                <p className="text-xs text-[var(--muted)]">
+                  {data.currentBalance < 0
+                    ? "You owe the shop"
+                    : data.currentBalance > 0
+                    ? "The shop owes you"
+                    : "Settled up"}
+                </p>
               </div>
 
               {owesMoney && (
