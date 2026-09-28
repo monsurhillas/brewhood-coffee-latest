@@ -53,6 +53,7 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPay, setShowPay] = useState(false);
+  const [showAdvance, setShowAdvance] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +192,19 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                   <span aria-hidden>📱</span> Scan to Pay {formatMoney(-data.currentBalance)}
                 </button>
               )}
+
+              {/* Always available, independent of the current balance — anyone
+                  (the employee themself, a manager, a well-wisher) may want
+                  to pay {name} an advance ahead of time via the same shop
+                  bKash merchant account. */}
+              <button
+                onClick={() => setShowAdvance(true)}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg border border-[#E2136E]/40 px-4 py-2.5 text-sm font-medium text-[#E2136E] transition hover:bg-[#E2136E]/5 dark:hover:bg-[#E2136E]/10 ${
+                  owesMoney ? "mt-2" : "mt-5"
+                }`}
+              >
+                <span aria-hidden>☕</span> Give {data.employee.name.split(" ")[0]} an Advance via bKash
+              </button>
             </div>
 
             <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -237,6 +251,18 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
             balance: data.currentBalance,
           }}
           onClose={() => setShowPay(false)}
+        />
+      )}
+
+      {showAdvance && data && (
+        <ScanToPayModal
+          employee={{
+            name: data.employee.name,
+            employee_id: data.employee.employee_id,
+            balance: data.currentBalance,
+          }}
+          mode="advance"
+          onClose={() => setShowAdvance(false)}
         />
       )}
     </div>

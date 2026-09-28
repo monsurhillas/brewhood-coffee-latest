@@ -2,7 +2,12 @@
 
 import { formatMoney } from "@/lib/format";
 
-export const BKASH_NUMBER = "01744337974";
+// BrewHood's actual bKash Merchant Account number (Bangla QR) — this is a
+// Payment/Merchant QR, not a Send Money number. Paying it goes through the
+// bKash app's "Payment" flow (scan or enter this as the Merchant number),
+// never "Send Money" — Send Money moves cash between personal wallets and
+// doesn't reach the shop's merchant account the same way.
+export const BKASH_NUMBER = "01321204763";
 
 export type PayableEmployee = {
   name: string;
@@ -17,11 +22,18 @@ export function paymentReference(employee: PayableEmployee): string {
 // Shared by the public directory's transaction modal (LedgerHome) and each
 // employee's own dedicated share-link page (/e/[id]) — one place owns the
 // bKash "Scan to Pay" presentation so both surfaces stay in sync.
+//
+// mode "due" (default) is for settling an existing negative balance — shows
+// the fixed amount owed. mode "advance" is for someone proactively paying an
+// employee ahead of time (no fixed amount; the payer decides how much), used
+// on the employee's own share page regardless of their current balance.
 export default function ScanToPayModal({
   employee,
+  mode = "due",
   onClose,
 }: {
   employee: PayableEmployee;
+  mode?: "due" | "advance";
   onClose: () => void;
 }) {
   const due = -employee.balance;
@@ -42,7 +54,13 @@ export default function ScanToPayModal({
           <div>
             <h2 className="text-base font-semibold">{employee.name}</h2>
             <p className="text-xs text-[var(--muted)]">
-              Amount due <span className="font-semibold text-red-500">{formatMoney(due)}</span>
+              {mode === "due" ? (
+                <>
+                  Amount due <span className="font-semibold text-red-500">{formatMoney(due)}</span>
+                </>
+              ) : (
+                "Give an advance — pay any amount"
+              )}
             </p>
           </div>
           <button onClick={onClose} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">
@@ -52,12 +70,13 @@ export default function ScanToPayModal({
 
         <img
           src="/bkash-qr.png"
-          alt="bKash QR code — scan to pay BrewHood Coffee"
+          alt="BrewHood Coffee bKash Merchant QR — scan in the bKash app to pay"
           className="mx-auto w-full max-w-[240px] rounded-xl border border-[var(--border)]"
         />
 
         <p className="mt-3 text-xs text-[var(--muted)]">
-          Scan with the bKash app, or Send Money to{" "}
+          Scan with the bKash app, or open <span className="font-semibold text-[var(--foreground)]">Payment</span> and
+          enter Merchant number{" "}
           <span className="font-semibold text-[var(--foreground)]">{BKASH_NUMBER}</span>
         </p>
 
