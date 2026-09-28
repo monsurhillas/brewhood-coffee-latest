@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import EmployeePicker, { EmployeeOption } from "@/components/dashboard/EmployeePicker";
 import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
+import EntryDateBar from "@/components/dashboard/EntryDateBar";
+import { useEntryDate } from "@/lib/useEntryDate";
 import { formatMoney, formatDate } from "@/lib/format";
 
 type Sku = { id: number; name: string; price: string; active: boolean };
@@ -28,6 +30,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<SaleRow[]>([]);
+  const entryDate = useEntryDate();
 
   useEffect(() => {
     fetch("/api/skus")
@@ -72,12 +75,16 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
         quantity: Number(quantity),
         unit_price: Number(unitPrice),
         note,
+        entry_date: entryDate.date,
       }),
     });
     setSaving(false);
 
     if (res.ok) {
-      setMessage({ type: "success", text: "Sale recorded." });
+      setMessage({
+        type: "success",
+        text: entryDate.isBackdated ? `Sale recorded for ${entryDate.date}.` : "Sale recorded.",
+      });
       setEmployee(null);
       setSkuId("");
       setUnitPrice("");
@@ -98,6 +105,8 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
         className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
       >
         <h2 className="font-medium">Sale Entry</h2>
+
+        <EntryDateBar entryDate={entryDate} />
 
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Employee</label>
