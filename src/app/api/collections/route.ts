@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Entry Date control on the Collection Entry tab (see useEntryDate.ts) —
+  // same backdating support as /api/sales, see its comment for the details.
+  const entryDate = body?.entry_date;
+  let createdAt: string | undefined;
+  if (entryDate !== undefined && entryDate !== null && entryDate !== "") {
+    if (!isValidDateString(entryDate) || isFutureDateString(entryDate)) {
+      return NextResponse.json({ error: "Entry date can't be in the future." }, { status: 400 });
+    }
+    createdAt = dateStringToTimestamp(entryDate);
+  }
+
   const db = sql();
-  const rows = await db`
-    INSERT INTO collections (employee_id, amount, method, is_contra, note)
-    VALUES (${employeeId}, ${amount}, ${method}, ${isContra}, ${body?.note ?? null})
-    RETURNING id, employee_id, amount::float8, method, is_contra, note, created_at
-  `;
+  const rows = createdAt
+    ? await db`
+        INSERT INTO collections (employee_id, amount, method, is_contra, note, created_at)
+        VALUES (${employeeId}, ${amount}, ${method}, ${isContra}, ${body?.note ?? null}, ${createdAt})
+        RETURNING id, employee_id, amount::float8, method, is_contra, note, created_at
+      `
+    : await db`
+        INSERT INTO collections (employee_id, amount, method, is_contra, note)
+        VALUES (${employeeId}, ${amount}, ${method}, ${isContra}, ${body?.note ?? null})
+        RETURNING id, employee_id, amount::float8, method, is_contra, note, created_at
+      `;
 
   return NextResponse.json({ collection: rows[0] }, { status: 201 });
 }
