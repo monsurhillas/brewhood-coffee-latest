@@ -5,7 +5,7 @@ import Link from "next/link";
 import { formatMoney, formatDate, balanceClass, amountClass } from "@/lib/format";
 import { drinkTagStyle, type DrinkSlice } from "@/lib/coffeeStats";
 import ThemeToggle from "@/components/ThemeToggle";
-import ScanToPayModal from "@/components/ledger/ScanToPayModal";
+import { BKASH_NUMBER, paymentReference } from "@/components/ledger/ScanToPayModal";
 import CoffeeMug from "@/components/ledger/CoffeeMug";
 
 type LedgerEmployee = {
@@ -52,8 +52,6 @@ const MAX_LEGEND_DRINKS = 4;
 export default function EmployeeSharePage({ employeeId }: { employeeId: string }) {
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showPay, setShowPay] = useState(false);
-  const [showAdvance, setShowAdvance] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +68,6 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
     };
   }, [employeeId]);
 
-  const owesMoney = Boolean(data && data.currentBalance < 0);
   // Keep this simple for an employee checking their own balance: only the
   // most recent 10 entries, and skip pre-import rows entirely (those are
   // an accounting-import detail the manager's own ledger view explains —
@@ -184,27 +181,35 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                 )}
               </div>
 
-              {owesMoney && (
-                <button
-                  onClick={() => setShowPay(true)}
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[#E2136E] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-                >
-                  <span aria-hidden>📱</span> Scan to Pay {formatMoney(-data.currentBalance)}
-                </button>
-              )}
-
-              {/* Always available, independent of the current balance — anyone
-                  (the employee themself, a manager, a well-wisher) may want
-                  to pay {name} an advance ahead of time via the same shop
-                  bKash merchant account. */}
-              <button
-                onClick={() => setShowAdvance(true)}
-                className={`flex w-full items-center justify-center gap-2 rounded-lg border border-[#E2136E]/40 px-4 py-2.5 text-sm font-medium text-[#E2136E] transition hover:bg-[#E2136E]/5 dark:hover:bg-[#E2136E]/10 ${
-                  owesMoney ? "mt-2" : "mt-5"
-                }`}
-              >
-                <span aria-hidden>☕</span> Give {data.employee.name.split(" ")[0]} an Advance via bKash
-              </button>
+              {/* Embedded directly in the card (not behind a button/modal) so
+                  the whole card can be screenshotted and sent to someone —
+                  the QR, merchant number and reference are all right here,
+                  legible on their own without opening the app. Shown
+                  regardless of balance: it doubles as "settle up" and as
+                  "give an advance ahead of time". */}
+              <p className="mt-5 text-[10px] uppercase tracking-wide text-[var(--muted)]">Pay via bKash</p>
+              <div className="mt-2 flex flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--border)] bg-black/5 p-4 text-center dark:bg-white/5">
+                <img
+                  src="/bkash-qr.png"
+                  alt="BrewHood Coffee bKash Merchant QR — scan in the bKash app to pay"
+                  className="w-full max-w-[200px] rounded-xl border border-[var(--border)]"
+                />
+                <p className="text-xs text-[var(--muted)]">
+                  Scan with the bKash app, or open{" "}
+                  <span className="font-semibold text-[var(--foreground)]">Payment</span> and enter Merchant number{" "}
+                  <span className="font-semibold text-[var(--foreground)]">{BKASH_NUMBER}</span>
+                </p>
+                <div className="w-full rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)] px-3 py-2 text-left">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Reference — please include</p>
+                  <p className="text-sm font-medium">
+                    {paymentReference({
+                      name: data.employee.name,
+                      employee_id: data.employee.employee_id,
+                      balance: data.currentBalance,
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -242,29 +247,6 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
           </>
         )}
       </main>
-
-      {showPay && data && (
-        <ScanToPayModal
-          employee={{
-            name: data.employee.name,
-            employee_id: data.employee.employee_id,
-            balance: data.currentBalance,
-          }}
-          onClose={() => setShowPay(false)}
-        />
-      )}
-
-      {showAdvance && data && (
-        <ScanToPayModal
-          employee={{
-            name: data.employee.name,
-            employee_id: data.employee.employee_id,
-            balance: data.currentBalance,
-          }}
-          mode="advance"
-          onClose={() => setShowAdvance(false)}
-        />
-      )}
     </div>
   );
 }
