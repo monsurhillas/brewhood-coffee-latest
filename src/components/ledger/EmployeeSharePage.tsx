@@ -186,27 +186,33 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                   the QR, merchant number and reference are all right here,
                   legible on their own without opening the app. Shown
                   regardless of balance: it doubles as "settle up" and as
-                  "give an advance ahead of time". */}
-              <p className="mt-5 text-[10px] uppercase tracking-wide text-[var(--muted)]">Pay via bKash</p>
-              <div className="mt-2 flex flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--border)] bg-black/5 p-4 text-center dark:bg-white/5">
+                  "give an advance ahead of time". Side-by-side layout keeps
+                  this to one compact row instead of a tall stacked block —
+                  the QR image is already a tight crop (just the code, no
+                  logo/border), so it stays legible at this size. */}
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-[var(--border)] bg-black/5 p-3 dark:bg-white/5">
                 <img
                   src="/bkash-qr.png"
                   alt="BrewHood Coffee bKash Merchant QR — scan in the bKash app to pay"
-                  className="w-full max-w-[200px] rounded-xl border border-[var(--border)]"
+                  className="h-36 w-36 shrink-0 rounded-lg border border-[var(--border)] sm:h-40 sm:w-40"
                 />
-                <p className="text-xs text-[var(--muted)]">
-                  Scan with the bKash app, or open{" "}
-                  <span className="font-semibold text-[var(--foreground)]">Payment</span> and enter Merchant number{" "}
-                  <span className="font-semibold text-[var(--foreground)]">{BKASH_NUMBER}</span>
-                </p>
-                <div className="w-full rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)] px-3 py-2 text-left">
-                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Reference — please include</p>
-                  <p className="text-sm font-medium">
-                    {paymentReference({
-                      name: data.employee.name,
-                      employee_id: data.employee.employee_id,
-                      balance: data.currentBalance,
-                    })}
+                <div className="min-w-0 text-xs text-[var(--muted)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--foreground)]">
+                    Pay via bKash
+                  </p>
+                  <p className="mt-1">
+                    Scan, or open <span className="font-medium text-[var(--foreground)]">Payment</span> → Merchant{" "}
+                    <span className="font-medium text-[var(--foreground)]">{BKASH_NUMBER}</span>
+                  </p>
+                  <p className="mt-1">
+                    Ref:{" "}
+                    <span className="font-medium text-[var(--foreground)]">
+                      {paymentReference({
+                        name: data.employee.name,
+                        employee_id: data.employee.employee_id,
+                        balance: data.currentBalance,
+                      })}
+                    </span>
                   </p>
                 </div>
               </div>
