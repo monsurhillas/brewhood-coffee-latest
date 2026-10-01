@@ -4,10 +4,15 @@ import { Fragment, useEffect, useState } from "react";
 import { formatMoney, formatDate } from "@/lib/format";
 import { currentMonthInDhaka, monthLabel } from "@/lib/salaryMonth";
 
-type SalaryEmployee = {
+// The shop's own internal staff (baristas, managers, etc) — wholly separate
+// from the `employees` table, which represents customers tracked in the
+// Employee Ledger. This is the entity the Salary tab's configuration,
+// advances, and payouts are keyed against.
+type SalaryStaff = {
   id: number;
-  employee_id: string;
   name: string;
+  phone: string | null;
+  role: string | null;
   active: boolean;
   monthly_salary: number | null;
   advances_this_month: number;
@@ -19,16 +24,24 @@ type SalaryEmployee = {
 
 type AdvanceRow = { id: number; amount: number; note: string | null; created_at: string };
 
-// Two compact sections, as requested: Salary Configuration (set each
-// employee's monthly wage — not month-scoped) and Advances & Payable (the
-// running mid-month advances against the selected month's payable, with a
-// one-click payout that zeroes it). This is a wage concept, kept entirely
-// separate from the sales/collections ledger's own "Advance Balance" stat
-// shown on the main dashboard — same word, different money.
+// Three compact sections, as requested: Staff (create/manage the shop's own
+// internal employees first), Salary Configuration (set each staff member's
+// monthly wage — not month-scoped), and Advances & Payable (the running
+// mid-month advances against the selected month's payable, with a one-click
+// payout that zeroes it). This is a wage concept, kept entirely separate
+// from the sales/collections ledger's own "Advance Balance" stat shown on
+// the main dashboard — same word, different money — and entirely separate
+// from the `employees` (customer) table.
 export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
   const [month, setMonth] = useState(currentMonthInDhaka());
-  const [employees, setEmployees] = useState<SalaryEmployee[] | null>(null);
+  const [staff, setStaff] = useState<SalaryStaff[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newRole, setNewRole] = useState("");
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [addStaffError, setAddStaffError] = useState<string | null>(null);
 
   const [editingSalaryId, setEditingSalaryId] = useState<number | null>(null);
   const [editSalaryValue, setEditSalaryValue] = useState("");
@@ -48,7 +61,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
   function load() {
     fetch(`/api/salary?month=${month}`)
       .then((res) => (res.ok ? res.json() : res.json().then((d) => Promise.reject(d))))
-      .then((data) => setEmployees(data.employees))
+      .then((data) => setStaff(data.staff))
       .catch((err) => setError(err?.error ?? "Failed to load salary data."));
   }
 
@@ -65,16 +78,50 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     setAdvanceOpenId(null);
   }
 
-  function startEditSalary(e: SalaryEmployee) {
-    setEditingSalaryId(e.id);
-    setEditSalaryValue(e.monthly_salary !== null ? String(e.monthly_salary) : "");
+  async function handleAddStaff(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) {
+      setAddStaffError("Name is required.");
+      return;
+    }
+    setAddingStaff(true);
+    setAddStaffError(null);
+    const res = await fetch("/api/staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim(), phone: newPhone || null, role: newRole || null }),
+    });
+    setAddingStaff(false);
+    if (res.ok) {
+      setNewName("");
+      setNewPhone("");
+      setNewRole("");
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setAddStaffError(data.error ?? "Failed to add staff member.");
+    }
   }
 
-  async function saveSalary(e: SalaryEmployee) {
+  async function toggleStaffActive(s: SalaryStaff) {
+    await fetch(`/api/staff/${s.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !s.active }),
+    });
+    load();
+  }
+
+  function startEditSalary(s: SalaryStaff) {
+    setEditingSalaryId(s.id);
+    setEditSalaryValue(s.monthly_salary !== null ? String(s.monthly_salary) : "");
+  }
+
+  async function saveSalary(s: SalaryStaff) {
     const value = editSalaryValue === "" ? null : Number(editSalaryValue);
     if (value !== null && (Number.isNaN(value) || value < 0)) return;
     setSalarySaving(true);
-    const res = await fetch(`/api/salary/employees/${e.id}`, {
+    const res = await fetch(`/api/staff/${s.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ monthly_salary: value }),
@@ -86,7 +133,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
-  async function submitAdvance(e: SalaryEmployee) {
+  async function submitAdvance(s: SalaryStaff) {
     const amount = Number(advanceAmount);
     if (!advanceAmount || Number.isNaN(amount) || amount <= 0) {
       setAdvanceError("Enter a valid amount.");
@@ -97,14 +144,14 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     const res = await fetch("/api/salary/advances", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employee_id: e.id, amount, month }),
+      body: JSON.stringify({ staff_id: s.id, amount, month }),
     });
     setAdvanceSaving(false);
     if (res.ok) {
       setAdvanceOpenId(null);
       setAdvanceAmount("");
       load();
-      if (expandedId === e.id) loadAdvanceDetails(e.id);
+      if (expandedId === s.id) loadAdvanceDetails(s.id);
       onSaved?.();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -112,34 +159,34 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
-  function loadAdvanceDetails(employeeId: number) {
-    fetch(`/api/salary/advances?employee_id=${employeeId}&month=${month}`)
+  function loadAdvanceDetails(staffId: number) {
+    fetch(`/api/salary/advances?staff_id=${staffId}&month=${month}`)
       .then((res) => res.json())
       .then((data) => setAdvanceDetails(data.advances ?? []));
   }
 
-  function toggleExpand(employeeId: number) {
-    if (expandedId === employeeId) {
+  function toggleExpand(staffId: number) {
+    if (expandedId === staffId) {
       setExpandedId(null);
       return;
     }
-    setExpandedId(employeeId);
-    loadAdvanceDetails(employeeId);
+    setExpandedId(staffId);
+    loadAdvanceDetails(staffId);
   }
 
-  async function deleteAdvance(id: number, employeeId: number) {
+  async function deleteAdvance(id: number, staffId: number) {
     await fetch(`/api/salary/advances/${id}`, { method: "DELETE" });
     load();
-    loadAdvanceDetails(employeeId);
+    loadAdvanceDetails(staffId);
   }
 
-  async function paySalary(e: SalaryEmployee) {
-    setPayingId(e.id);
-    setRowError((prev) => ({ ...prev, [e.id]: "" }));
+  async function paySalary(s: SalaryStaff) {
+    setPayingId(s.id);
+    setRowError((prev) => ({ ...prev, [s.id]: "" }));
     const res = await fetch("/api/salary/pay", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employee_id: e.id, month }),
+      body: JSON.stringify({ staff_id: s.id, month }),
     });
     setPayingId(null);
     if (res.ok) {
@@ -147,13 +194,13 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
       onSaved?.();
     } else {
       const data = await res.json().catch(() => ({}));
-      setRowError((prev) => ({ ...prev, [e.id]: data.error ?? "Failed to pay salary." }));
+      setRowError((prev) => ({ ...prev, [s.id]: data.error ?? "Failed to pay salary." }));
     }
   }
 
-  async function undoPay(e: SalaryEmployee) {
-    setPayingId(e.id);
-    await fetch(`/api/salary/pay?employee_id=${e.id}&month=${month}`, { method: "DELETE" });
+  async function undoPay(s: SalaryStaff) {
+    setPayingId(s.id);
+    await fetch(`/api/salary/pay?staff_id=${s.id}&month=${month}`, { method: "DELETE" });
     setPayingId(null);
     load();
     onSaved?.();
@@ -161,28 +208,110 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
+        <form
+          onSubmit={handleAddStaff}
+          className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
+        >
+          <h2 className="font-medium">Add Staff</h2>
+          <p className="-mt-2 text-xs text-[var(--muted)]">Your own employees — not customers.</p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Name</label>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Phone (optional)</label>
+            <input
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Role (optional)</label>
+            <input
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value)}
+              placeholder="Barista, Manager…"
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+          {addStaffError && <p className="text-xs text-red-500">{addStaffError}</p>}
+          <button
+            type="submit"
+            disabled={addingStaff}
+            className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+          >
+            {addingStaff ? "Adding…" : "Add Staff"}
+          </button>
+        </form>
+
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+          <h2 className="mb-3 font-medium">Staff</h2>
+          {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
+          <div className="scroll-fade-x overflow-x-auto">
+            <table className="w-full min-w-[360px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
+                  <th className="pb-2">Name</th>
+                  <th className="pb-2">Role</th>
+                  <th className="pb-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff?.map((s) => (
+                  <tr key={s.id} className="border-b border-[var(--border)] last:border-0">
+                    <td className="py-2">
+                      {s.name}
+                      {s.phone && <span className="ml-1 text-xs text-[var(--muted)]">· {s.phone}</span>}
+                    </td>
+                    <td className="py-2 text-[var(--muted)]">{s.role ?? "—"}</td>
+                    <td className="py-2 text-right">
+                      <button
+                        onClick={() => toggleStaffActive(s)}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          s.active
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        {s.active ? "Active" : "Inactive"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet — add your first one.</p>}
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-1 font-medium">Salary Configuration</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Set each employee&apos;s monthly salary. Click an amount to edit it.
+          Set each staff member&apos;s monthly salary. Click an amount to edit it.
         </p>
-        {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
         <div className="scroll-fade-x overflow-x-auto">
           <table className="w-full min-w-[360px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
-                <th className="pb-2">Employee</th>
+                <th className="pb-2">Staff</th>
                 <th className="pb-2 text-right">Monthly Salary</th>
               </tr>
             </thead>
             <tbody>
-              {employees?.map((e) => (
-                <tr key={e.id} className="border-b border-[var(--border)] last:border-0">
+              {staff?.map((s) => (
+                <tr key={s.id} className="border-b border-[var(--border)] last:border-0">
                   <td className="py-2">
-                    {e.name} <span className="text-xs text-[var(--muted)]">#{e.employee_id}</span>
+                    {s.name} {s.role && <span className="text-xs text-[var(--muted)]">· {s.role}</span>}
                   </td>
                   <td className="py-2 text-right">
-                    {editingSalaryId === e.id ? (
+                    {editingSalaryId === s.id ? (
                       <div className="flex items-center justify-end gap-1.5">
                         <input
                           type="number"
@@ -192,13 +321,13 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                           value={editSalaryValue}
                           onChange={(ev) => setEditSalaryValue(ev.target.value)}
                           onKeyDown={(ev) => {
-                            if (ev.key === "Enter") saveSalary(e);
+                            if (ev.key === "Enter") saveSalary(s);
                             if (ev.key === "Escape") setEditingSalaryId(null);
                           }}
                           className="w-28 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1 text-right text-sm outline-none focus:border-[var(--brand)]"
                         />
                         <button
-                          onClick={() => saveSalary(e)}
+                          onClick={() => saveSalary(s)}
                           disabled={salarySaving}
                           className="rounded px-1.5 py-1 text-xs font-medium text-emerald-600 hover:underline disabled:opacity-60"
                         >
@@ -214,11 +343,11 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                       </div>
                     ) : (
                       <button
-                        onClick={() => startEditSalary(e)}
+                        onClick={() => startEditSalary(s)}
                         title="Edit monthly salary"
                         className="rounded px-1.5 py-0.5 hover:bg-black/5 dark:hover:bg-white/5"
                       >
-                        {e.monthly_salary !== null ? formatMoney(e.monthly_salary) : "Not set"}{" "}
+                        {s.monthly_salary !== null ? formatMoney(s.monthly_salary) : "Not set"}{" "}
                         <span aria-hidden className="ml-1 text-xs text-[var(--muted)]">✎</span>
                       </button>
                     )}
@@ -227,7 +356,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
               ))}
             </tbody>
           </table>
-          {employees?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No employees yet.</p>}
+          {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet.</p>}
         </div>
       </div>
 
@@ -249,7 +378,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
-                <th className="pb-2">Employee</th>
+                <th className="pb-2">Staff</th>
                 <th className="pb-2 text-right">Salary</th>
                 <th className="pb-2 text-right">Advances</th>
                 <th className="pb-2 text-right">Payable</th>
@@ -257,37 +386,37 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
               </tr>
             </thead>
             <tbody>
-              {employees?.map((e) => (
-                <Fragment key={e.id}>
+              {staff?.map((s) => (
+                <Fragment key={s.id}>
                   <tr className="border-b border-[var(--border)] last:border-0 align-top">
                     <td className="py-2">
-                      {e.name} <span className="text-xs text-[var(--muted)]">#{e.employee_id}</span>
+                      {s.name} {s.role && <span className="text-xs text-[var(--muted)]">· {s.role}</span>}
                     </td>
                     <td className="py-2 text-right">
-                      {e.monthly_salary !== null ? formatMoney(e.monthly_salary) : <span className="text-xs text-[var(--muted)]">Not set</span>}
+                      {s.monthly_salary !== null ? formatMoney(s.monthly_salary) : <span className="text-xs text-[var(--muted)]">Not set</span>}
                     </td>
                     <td className="py-2 text-right">
                       <button
-                        onClick={() => toggleExpand(e.id)}
+                        onClick={() => toggleExpand(s.id)}
                         className="rounded px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5"
                         title="View advance details"
                       >
-                        {formatMoney(e.advances_this_month)}
+                        {formatMoney(s.advances_this_month)}
                       </button>
                     </td>
-                    <td className={`py-2 text-right font-medium ${e.payable < 0 ? "text-red-500" : ""}`}>
-                      {formatMoney(e.payable)}
+                    <td className={`py-2 text-right font-medium ${s.payable < 0 ? "text-red-500" : ""}`}>
+                      {formatMoney(s.payable)}
                     </td>
                     <td className="py-2 text-right">
                       <div className="flex flex-col items-end gap-1">
-                        {e.paid ? (
+                        {s.paid ? (
                           <div className="flex items-center gap-2">
                             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                              Paid {formatMoney(e.paid_amount ?? 0)}
+                              Paid {formatMoney(s.paid_amount ?? 0)}
                             </span>
                             <button
-                              onClick={() => undoPay(e)}
-                              disabled={payingId === e.id}
+                              onClick={() => undoPay(s)}
+                              disabled={payingId === s.id}
                               className="text-xs text-[var(--muted)] hover:underline disabled:opacity-60"
                             >
                               Undo
@@ -296,26 +425,26 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                         ) : (
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setAdvanceOpenId(advanceOpenId === e.id ? null : e.id)}
+                              onClick={() => setAdvanceOpenId(advanceOpenId === s.id ? null : s.id)}
                               className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
                             >
                               + Advance
                             </button>
                             <button
-                              onClick={() => paySalary(e)}
-                              disabled={payingId === e.id || !e.monthly_salary}
+                              onClick={() => paySalary(s)}
+                              disabled={payingId === s.id || !s.monthly_salary}
                               className="rounded-lg bg-[var(--brand)] px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
                             >
-                              {payingId === e.id ? "Paying…" : "Pay Salary"}
+                              {payingId === s.id ? "Paying…" : "Pay Salary"}
                             </button>
                           </div>
                         )}
-                        {rowError[e.id] && <p className="text-xs text-red-500">{rowError[e.id]}</p>}
+                        {rowError[s.id] && <p className="text-xs text-red-500">{rowError[s.id]}</p>}
                       </div>
                     </td>
                   </tr>
 
-                  {advanceOpenId === e.id && (
+                  {advanceOpenId === s.id && (
                     <tr className="border-b border-[var(--border)] last:border-0 bg-black/5 dark:bg-white/5">
                       <td colSpan={5} className="px-2 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
@@ -327,11 +456,11 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                             placeholder="Advance amount"
                             value={advanceAmount}
                             onChange={(ev) => setAdvanceAmount(ev.target.value)}
-                            onKeyDown={(ev) => ev.key === "Enter" && submitAdvance(e)}
+                            onKeyDown={(ev) => ev.key === "Enter" && submitAdvance(s)}
                             className="w-36 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm outline-none focus:border-[var(--brand)]"
                           />
                           <button
-                            onClick={() => submitAdvance(e)}
+                            onClick={() => submitAdvance(s)}
                             disabled={advanceSaving}
                             className="rounded-lg bg-[var(--brand)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
                           >
@@ -352,7 +481,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                     </tr>
                   )}
 
-                  {expandedId === e.id && (
+                  {expandedId === s.id && (
                     <tr className="border-b border-[var(--border)] last:border-0">
                       <td colSpan={5} className="px-2 pb-3">
                         {advanceDetails.length === 0 ? (
@@ -367,7 +496,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                                 <span className="flex items-center gap-2">
                                   <span className="font-medium text-[var(--foreground)]">{formatMoney(a.amount)}</span>
                                   <button
-                                    onClick={() => deleteAdvance(a.id, e.id)}
+                                    onClick={() => deleteAdvance(a.id, s.id)}
                                     className="text-red-500 hover:underline"
                                   >
                                     Remove
@@ -384,7 +513,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
               ))}
             </tbody>
           </table>
-          {employees?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No employees yet.</p>}
+          {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet.</p>}
         </div>
       </div>
     </div>

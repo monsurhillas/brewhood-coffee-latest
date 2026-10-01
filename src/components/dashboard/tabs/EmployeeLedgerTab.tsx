@@ -52,6 +52,16 @@ export default function EmployeeLedgerTab() {
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Inline name edit — customers are tracked here as "employees" in the
+  // data model, but this is purely editing a customer's display name
+  // (e.g. a typo from import). Deliberately only touches this authenticated
+  // manager view: the public /e/[id] share page has no edit affordance and
+  // its backing API route stays GET-only.
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
   // The link is always shown in a plain, selectable field below (see
   // render) so sharing it never depends on the Clipboard API working —
   // some browsers restrict or silently hang navigator.clipboard.writeText
@@ -95,6 +105,47 @@ export default function EmployeeLedgerTab() {
     };
   }, [employee]);
 
+  function startEditName() {
+    if (!data) return;
+    setEditingName(true);
+    setEditNameValue(data.employee.name);
+    setNameError(null);
+  }
+
+  function cancelEditName() {
+    setEditingName(false);
+    setNameError(null);
+  }
+
+  async function saveName() {
+    if (!data || !employee) return;
+    const trimmed = editNameValue.trim();
+    if (!trimmed) {
+      setNameError("Name can't be empty.");
+      return;
+    }
+    setNameSaving(true);
+    setNameError(null);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw d;
+      }
+      setData((prev) => (prev ? { ...prev, employee: { ...prev.employee, name: trimmed } } : prev));
+      setEmployee((prev) => (prev ? { ...prev, name: trimmed } : prev));
+      setEditingName(false);
+    } catch (err) {
+      setNameError((err as { error?: string })?.error ?? "Failed to update name.");
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
   const filtered = useMemo(() => {
     if (!data) return [];
     return data.transactions.filter((t) => {
@@ -135,7 +186,56 @@ export default function EmployeeLedgerTab() {
       {data && !loading && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <SummaryCard label="Employee" value={data.employee.name} sub={`#${data.employee.employee_id}${data.employee.active ? "" : " · Inactive"}`} />
+            <SummaryCard
+              label="Employee"
+              value={
+                editingName ? (
+                  <div className="flex flex-col gap-1">
+                    <input
+                      autoFocus
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveName();
+                        if (e.key === "Escape") cancelEditName();
+                      }}
+                      className="w-full min-w-0 rounded border border-[var(--border)] bg-transparent px-1.5 py-0.5 text-sm font-semibold outline-none focus:border-[var(--brand)]"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveName}
+                        disabled={nameSaving}
+                        className="shrink-0 text-xs font-medium text-emerald-600 hover:underline disabled:opacity-60"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEditName}
+                        disabled={nameSaving}
+                        className="shrink-0 text-xs text-[var(--muted)] hover:underline disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startEditName}
+                    title="Edit name"
+                    className="group flex w-full items-center gap-1 text-left"
+                  >
+                    <span className="truncate">{data.employee.name}</span>
+                    <span aria-hidden className="text-xs text-[var(--muted)] opacity-0 group-hover:opacity-100">✎</span>
+                  </button>
+                )
+              }
+              sub={
+                nameError ??
+                `#${data.employee.employee_id}${data.employee.active ? "" : " · Inactive"}`
+              }
+              subClassName={nameError ? "text-red-500" : undefined}
+            />
             <SummaryCard
               label="Opening Balance"
               value={formatMoney(data.openingBalance)}
@@ -300,17 +400,19 @@ function SummaryCard({
   value,
   sub,
   valueClassName,
+  subClassName,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   valueClassName?: string;
+  subClassName?: string;
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
       <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</p>
-      <p className={`truncate text-lg font-semibold ${valueClassName ?? ""}`}>{value}</p>
-      {sub && <p className="text-[10px] text-[var(--muted)]">{sub}</p>}
+      <div className={`truncate text-lg font-semibold ${valueClassName ?? ""}`}>{value}</div>
+      {sub && <p className={`text-[10px] text-[var(--muted)] ${subClassName ?? ""}`}>{sub}</p>}
     </div>
   );
 }
