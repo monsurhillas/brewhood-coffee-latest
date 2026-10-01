@@ -14,6 +14,7 @@ import SkusTab from "@/components/dashboard/tabs/SkusTab";
 import BulkUploadTab from "@/components/dashboard/tabs/BulkUploadTab";
 import InvoiceTab from "@/components/dashboard/tabs/InvoiceTab";
 import EmployeeLedgerTab from "@/components/dashboard/tabs/EmployeeLedgerTab";
+import SalaryTab from "@/components/dashboard/tabs/SalaryTab";
 import AdminTab from "@/components/dashboard/tabs/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import { formatMoney } from "@/lib/format";
@@ -29,6 +30,7 @@ const TABS = [
   { key: "reports", label: "Day-wise Reports", short: "Reports" },
   { key: "download", label: "Download Reports", short: "Downloads" },
   { key: "skus", label: "SKUs", short: "SKUs" },
+  { key: "salary", label: "Salary", short: "Salary" },
   // Not in adminUsers.TAB_KEYS on purpose — it's never one of the tabs a
   // super admin can hand out. Only isSuperAdmin below decides whether this
   // shows up at all.
@@ -285,6 +287,7 @@ export default function DashboardShell({
               {tab === "reports" && <ReportsTab />}
               {tab === "download" && <DownloadReportsPanel />}
               {tab === "skus" && <SkusTab />}
+              {tab === "salary" && <SalaryTab onSaved={bumpRefresh} />}
               {tab === "admin" && <AdminTab />}
             </div>
           )}
@@ -504,6 +507,14 @@ function TabIcon({ tabKey }: { tabKey: TabKey }) {
           <path d="M21 8l-9-5-9 5 9 5 9-5Z" />
           <path d="M3 8v8l9 5 9-5V8" />
           <path d="M12 13v8" />
+        </svg>
+      );
+    case "salary":
+      return (
+        <svg {...p}>
+          <rect x="3" y="6" width="18" height="13" rx="2" />
+          <circle cx="12" cy="12.5" r="2.6" />
+          <path d="M3 10h2M19 10h2M3 15h2M19 15h2" />
         </svg>
       );
     case "admin":
