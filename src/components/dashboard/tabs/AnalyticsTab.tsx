@@ -18,6 +18,7 @@ import {
   Legend,
 } from "recharts";
 import { formatMoney, formatDay } from "@/lib/format";
+import { currentMonthInDhaka, monthLabel } from "@/lib/salaryMonth";
 
 type Analytics = {
   totals: {
@@ -51,6 +52,7 @@ const PIE_COLORS = ["#d79a5e", "#6f4518", "#3b82f6", "#ef4444", "#10b981", "#8b5
 
 export default function AnalyticsTab() {
   const [data, setData] = useState<Analytics | null>(null);
+  const [view, setView] = useState<"overview" | "coffee">("overview");
 
   useEffect(() => {
     fetch("/api/analytics")
@@ -58,8 +60,54 @@ export default function AnalyticsTab() {
       .then(setData);
   }, []);
 
-  if (!data) return <p className="py-12 text-center text-sm text-[var(--muted)]">Loading analytics…</p>;
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex gap-2">
+        <ViewTabButton active={view === "overview"} onClick={() => setView("overview")}>
+          Overview
+        </ViewTabButton>
+        <ViewTabButton active={view === "coffee"} onClick={() => setView("coffee")}>
+          Daily Coffee Sales
+        </ViewTabButton>
+      </div>
 
+      {view === "overview" ? (
+        data ? (
+          <AnalyticsOverview data={data} />
+        ) : (
+          <p className="py-12 text-center text-sm text-[var(--muted)]">Loading analytics…</p>
+        )
+      ) : (
+        <CoffeeDailyView />
+      )}
+    </div>
+  );
+}
+
+function ViewTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+        active
+          ? "bg-[var(--brand)] text-white"
+          : "border border-[var(--border)] text-[var(--muted)] hover:bg-black/5 dark:hover:bg-white/5"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function AnalyticsOverview({ data }: { data: Analytics }) {
   const { totals } = data;
 
   const weekdayChartData = data.weekdaySeasonality.map((w) => ({
@@ -313,6 +361,100 @@ function MoneyTooltip({
           <span className="font-medium">{formatMoney(p.value ?? 0)}</span>
         </p>
       ))}
+    </div>
+  );
+}
+
+type CoffeeDaily = {
+  month: string;
+  drinkNames: string[];
+  days: { day: string; counts: Record<string, number>; totalQty: number; totalAmount: number }[];
+  totals: { totalQty: number; totalAmount: number; byDrink: Record<string, number> };
+};
+
+// Day-by-day quantities for coffee drinks only (Americano, Cappuccino,
+// Latte, etc — see isCoffeeDrink() in coffeeStats.ts), filtered by month,
+// with a totals row at the bottom. Separate view rather than mixed into
+// the overview charts above, since it's a detailed report rather than a
+// trend to glance at.
+function CoffeeDailyView() {
+  const [month, setMonth] = useState(currentMonthInDhaka());
+  const [data, setData] = useState<CoffeeDaily | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/analytics/coffee-daily?month=${month}`)
+      .then((res) => res.json())
+      .then(setData);
+  }, [month]);
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-medium">Daily Coffee Sold</h2>
+          <p className="text-xs text-[var(--muted)]">{data ? monthLabel(data.month) : ""}</p>
+        </div>
+        <input
+          type="month"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="rounded-lg border border-[var(--border)] bg-transparent px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+        />
+      </div>
+
+      {!data ? (
+        <p className="py-12 text-center text-sm text-[var(--muted)]">Loading…</p>
+      ) : data.drinkNames.length === 0 ? (
+        <p className="py-12 text-center text-sm text-[var(--muted)]">No coffee sales this month.</p>
+      ) : (
+        <div className="scroll-fade-x overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
+                <th className="pb-2">Day</th>
+                {data.drinkNames.map((name) => (
+                  <th key={name} className="pb-2 text-right">
+                    {name}
+                  </th>
+                ))}
+                <th className="pb-2 text-right font-semibold">Total Qty</th>
+                <th className="pb-2 text-right font-semibold">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.days.map((d) => (
+                <tr
+                  key={d.day}
+                  className={`border-b border-[var(--border)] last:border-0 ${
+                    d.totalQty === 0 ? "text-[var(--muted)]" : ""
+                  }`}
+                >
+                  <td className="py-1.5">{formatDay(d.day)}</td>
+                  {data.drinkNames.map((name) => (
+                    <td key={name} className="py-1.5 text-right">
+                      {d.counts[name] || "—"}
+                    </td>
+                  ))}
+                  <td className="py-1.5 text-right font-medium text-[var(--foreground)]">{d.totalQty}</td>
+                  <td className="py-1.5 text-right font-medium text-[var(--foreground)]">{formatMoney(d.totalAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[var(--border)] font-semibold">
+                <td className="pt-2">Total</td>
+                {data.drinkNames.map((name) => (
+                  <td key={name} className="pt-2 text-right">
+                    {data.totals.byDrink[name] ?? 0}
+                  </td>
+                ))}
+                <td className="pt-2 text-right">{data.totals.totalQty}</td>
+                <td className="pt-2 text-right">{formatMoney(data.totals.totalAmount)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

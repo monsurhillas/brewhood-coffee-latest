@@ -30,6 +30,7 @@ const TAB_LABELS: Record<string, string> = {
   reports: "Day-wise Reports",
   download: "Download Reports",
   skus: "SKUs",
+  salary: "Salary",
 };
 
 export default function AdminTab() {
