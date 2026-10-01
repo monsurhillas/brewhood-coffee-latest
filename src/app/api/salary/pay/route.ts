@@ -5,48 +5,48 @@ import { currentMonthInDhaka, isValidMonthString } from "@/lib/salaryMonth";
 
 export const dynamic = "force-dynamic";
 
-// Pays out an employee's salary for a month: snapshots monthly_salary and
+// Pays out a staff member's salary for a month: snapshots monthly_salary and
 // that month's advances at this moment, records the net amount actually
 // paid, and — by virtue of that row existing — zeroes the month's payable
-// (see /api/salary/route.ts). The UNIQUE(employee_id, month) constraint is
-// the real guard against double-paying; the ON CONFLICT DO NOTHING below
-// just turns a race into a clean "already paid" error instead of a crash.
+// (see /api/salary/route.ts). The UNIQUE(staff_id, month) constraint is the
+// real guard against double-paying; the ON CONFLICT DO NOTHING below just
+// turns a race into a clean "already paid" error instead of a crash.
 export async function POST(request: NextRequest) {
   const { response } = await requireTab("salary");
   if (response) return response;
 
   const body = await request.json().catch(() => null);
-  const employeeId = Number(body?.employee_id);
-  if (!employeeId) {
-    return NextResponse.json({ error: "employee_id is required." }, { status: 400 });
+  const staffId = Number(body?.staff_id);
+  if (!staffId) {
+    return NextResponse.json({ error: "staff_id is required." }, { status: 400 });
   }
   const month = isValidMonthString(body?.month) ? body.month : currentMonthInDhaka();
 
   await ensureSalaryTables();
   const db = sql();
 
-  const [emp] = await db`
-    SELECT monthly_salary::float8 AS monthly_salary FROM employees WHERE id = ${employeeId}
+  const [member] = await db`
+    SELECT monthly_salary::float8 AS monthly_salary FROM staff WHERE id = ${staffId}
   `;
-  if (!emp) {
-    return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+  if (!member) {
+    return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
   }
-  if (!emp.monthly_salary || emp.monthly_salary <= 0) {
-    return NextResponse.json({ error: "Set a monthly salary for this employee first." }, { status: 400 });
+  if (!member.monthly_salary || member.monthly_salary <= 0) {
+    return NextResponse.json({ error: "Set a monthly salary for this staff member first." }, { status: 400 });
   }
 
   const [adv] = await db`
     SELECT COALESCE(SUM(amount), 0)::float8 AS total
-    FROM salary_advances WHERE employee_id = ${employeeId} AND month = ${month}
+    FROM salary_advances WHERE staff_id = ${staffId} AND month = ${month}
   `;
   const advancesAmount = adv.total;
-  const amountPaid = emp.monthly_salary - advancesAmount;
+  const amountPaid = member.monthly_salary - advancesAmount;
 
   const rows = await db`
-    INSERT INTO salary_payments (employee_id, month, salary_amount, advances_amount, amount_paid)
-    VALUES (${employeeId}, ${month}, ${emp.monthly_salary}, ${advancesAmount}, ${amountPaid})
-    ON CONFLICT (employee_id, month) DO NOTHING
-    RETURNING id, employee_id, month, salary_amount::float8 AS salary_amount,
+    INSERT INTO salary_payments (staff_id, month, salary_amount, advances_amount, amount_paid)
+    VALUES (${staffId}, ${month}, ${member.monthly_salary}, ${advancesAmount}, ${amountPaid})
+    ON CONFLICT (staff_id, month) DO NOTHING
+    RETURNING id, staff_id, month, salary_amount::float8 AS salary_amount,
       advances_amount::float8 AS advances_amount, amount_paid::float8 AS amount_paid, created_at
   `;
 
@@ -62,14 +62,14 @@ export async function DELETE(request: NextRequest) {
   const { response } = await requireTab("salary");
   if (response) return response;
 
-  const employeeId = Number(request.nextUrl.searchParams.get("employee_id"));
+  const staffId = Number(request.nextUrl.searchParams.get("staff_id"));
   const monthParam = request.nextUrl.searchParams.get("month");
   const month = isValidMonthString(monthParam) ? monthParam : currentMonthInDhaka();
-  if (!employeeId) {
-    return NextResponse.json({ error: "employee_id is required." }, { status: 400 });
+  if (!staffId) {
+    return NextResponse.json({ error: "staff_id is required." }, { status: 400 });
   }
 
   const db = sql();
-  await db`DELETE FROM salary_payments WHERE employee_id = ${employeeId} AND month = ${month}`;
+  await db`DELETE FROM salary_payments WHERE staff_id = ${staffId} AND month = ${month}`;
   return NextResponse.json({ ok: true });
 }
