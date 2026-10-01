@@ -25,9 +25,26 @@ export function sql(): NeonQueryFunction<false, false> {
   return _sql;
 }
 
+// A customer the coffee shop sells to on credit — tracked via sales,
+// collections, and the Employee Ledger / public share-page feature.
+// Despite the name (kept for backwards compatibility with the existing
+// `employees` table and routes), this is NOT the shop's own internal staff —
+// see the separate `Staff` type below for that.
 export type Employee = {
   id: number;
   employee_id: string;
+  name: string;
+  phone: string | null;
+  role: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+// An internal coffee-shop staff member (barista, manager, etc), wholly
+// separate from the `employees` (customer) table above. This is what the
+// Salary tab's configuration/advances/payouts are keyed against.
+export type Staff = {
+  id: number;
   name: string;
   phone: string | null;
   role: string | null;
@@ -74,43 +91,75 @@ export const BULK_EDIT_WINDOW_DAYS = 7;
 export const BULK_UPLOAD_NOTE = "Bulk PDF upload";
 
 // Self-healing lazy migration (same pattern as ensureUploadedAtColumn) for
-// the Salary tab: each employee's configured monthly salary, a log of
-// mid-month advances (kept entirely separate from the pre-existing
-// sales/collections "advance balance" concept — see salary_payments'
-// comment below for why), and a record of each month's salary payout.
+// the Salary tab: an internal `staff` roster (wholly separate from the
+// `employees` customer table), each staff member's configured monthly
+// salary, a log of mid-month advances (kept entirely separate from the
+// pre-existing sales/collections "advance balance" concept — see
+// salary_payments' comment below for why), and a record of each month's
+// salary payout.
 let _salaryTablesEnsured = false;
 export async function ensureSalaryTables(): Promise<void> {
   if (_salaryTablesEnsured) return;
   const db = sql();
-  await db.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2)`);
+
+  // One-time corrective migration: salary_advances/salary_payments were
+  // briefly shipped keyed on employees(id) — treating the shop's customers
+  // as its own staff, which was wrong (see the Staff type above). That
+  // version of the feature was never functionally reachable from a correct
+  // "create staff, then pay them" flow, so no real salary data can exist
+  // under the old schema. `staff` not existing yet is exactly "first run
+  // after the fix" — drop the old employee-keyed tables/column so they can
+  // be recreated staff-keyed below. Once `staff` exists this check is a
+  // single cheap SELECT and the drop never runs again, so it can never
+  // touch real future salary data.
+  const staffCheck = (await db.query(`SELECT to_regclass('public.staff') AS reg`)) as {
+    reg: string | null;
+  }[];
+  if (!staffCheck[0]?.reg) {
+    await db.query(`DROP TABLE IF EXISTS salary_payments`);
+    await db.query(`DROP TABLE IF EXISTS salary_advances`);
+    await db.query(`ALTER TABLE employees DROP COLUMN IF EXISTS monthly_salary`);
+  }
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS staff (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      role TEXT,
+      monthly_salary NUMERIC(10,2),
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
   await db.query(`
     CREATE TABLE IF NOT EXISTS salary_advances (
       id SERIAL PRIMARY KEY,
-      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
       amount NUMERIC(10,2) NOT NULL,
       note TEXT,
       month TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
-  // One row per employee per month they were actually paid. Its presence
-  // (not a flag) is what zeroes that month's payable — see
+  // One row per staff member per month they were actually paid. Its
+  // presence (not a flag) is what zeroes that month's payable — see
   // /api/salary/route.ts. salary_amount/advances_amount are a snapshot at
   // payout time so a later change to monthly_salary never rewrites a
   // month that's already been paid out.
   await db.query(`
     CREATE TABLE IF NOT EXISTS salary_payments (
       id SERIAL PRIMARY KEY,
-      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
       month TEXT NOT NULL,
       salary_amount NUMERIC(10,2) NOT NULL,
       advances_amount NUMERIC(10,2) NOT NULL,
       amount_paid NUMERIC(10,2) NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(employee_id, month)
+      UNIQUE(staff_id, month)
     )
   `);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_employee_month ON salary_advances(employee_id, month)`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_employee_month ON salary_payments(employee_id, month)`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`);
   _salaryTablesEnsured = true;
 }

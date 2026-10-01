@@ -93,12 +93,22 @@ export const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_invoices_employee ON invoices(employee_id)`,
   `CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(created_at)`,
-  // Salary tab — see ensureSalaryTables() in db.ts for the full rationale;
-  // kept in sync here so a fresh /api/init run creates these too.
-  `ALTER TABLE employees ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2)`,
+  // Salary tab — internal staff roster, wholly separate from the
+  // `employees` customer table above. See ensureSalaryTables() in db.ts for
+  // the full rationale; kept in sync here so a fresh /api/init run creates
+  // these too.
+  `CREATE TABLE IF NOT EXISTS staff (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT,
+    role TEXT,
+    monthly_salary NUMERIC(10,2),
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`,
   `CREATE TABLE IF NOT EXISTS salary_advances (
     id SERIAL PRIMARY KEY,
-    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
     amount NUMERIC(10,2) NOT NULL,
     note TEXT,
     month TEXT NOT NULL,
@@ -106,14 +116,14 @@ export const SCHEMA_STATEMENTS = [
   )`,
   `CREATE TABLE IF NOT EXISTS salary_payments (
     id SERIAL PRIMARY KEY,
-    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
     month TEXT NOT NULL,
     salary_amount NUMERIC(10,2) NOT NULL,
     advances_amount NUMERIC(10,2) NOT NULL,
     amount_paid NUMERIC(10,2) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(employee_id, month)
+    UNIQUE(staff_id, month)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_salary_advances_employee_month ON salary_advances(employee_id, month)`,
-  `CREATE INDEX IF NOT EXISTS idx_salary_payments_employee_month ON salary_payments(employee_id, month)`,
+  `CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`,
+  `CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`,
 ];
