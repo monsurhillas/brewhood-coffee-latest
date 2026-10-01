@@ -21,6 +21,7 @@ export const TAB_KEYS = [
   "reports",
   "download",
   "skus",
+  "salary",
 ] as const;
 
 export type TabKey = (typeof TAB_KEYS)[number];

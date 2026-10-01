@@ -33,6 +33,7 @@ export type Employee = {
   role: string | null;
   active: boolean;
   created_at: string;
+  monthly_salary: string | null;
 };
 
 export type Sku = {
@@ -71,3 +72,45 @@ export async function ensureUploadedAtColumn(): Promise<void> {
 // bulk-uploads list and the sales/collections edit endpoints.
 export const BULK_EDIT_WINDOW_DAYS = 7;
 export const BULK_UPLOAD_NOTE = "Bulk PDF upload";
+
+// Self-healing lazy migration (same pattern as ensureUploadedAtColumn) for
+// the Salary tab: each employee's configured monthly salary, a log of
+// mid-month advances (kept entirely separate from the pre-existing
+// sales/collections "advance balance" concept — see salary_payments'
+// comment below for why), and a record of each month's salary payout.
+let _salaryTablesEnsured = false;
+export async function ensureSalaryTables(): Promise<void> {
+  if (_salaryTablesEnsured) return;
+  const db = sql();
+  await db.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2)`);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS salary_advances (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      amount NUMERIC(10,2) NOT NULL,
+      note TEXT,
+      month TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  // One row per employee per month they were actually paid. Its presence
+  // (not a flag) is what zeroes that month's payable — see
+  // /api/salary/route.ts. salary_amount/advances_amount are a snapshot at
+  // payout time so a later change to monthly_salary never rewrites a
+  // month that's already been paid out.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS salary_payments (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      month TEXT NOT NULL,
+      salary_amount NUMERIC(10,2) NOT NULL,
+      advances_amount NUMERIC(10,2) NOT NULL,
+      amount_paid NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(employee_id, month)
+    )
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_employee_month ON salary_advances(employee_id, month)`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_employee_month ON salary_payments(employee_id, month)`);
+  _salaryTablesEnsured = true;
+}

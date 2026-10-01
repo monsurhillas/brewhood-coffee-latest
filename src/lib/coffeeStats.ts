@@ -55,6 +55,19 @@ export function drinkColor(name: string, fallbackIndex: number): string {
   return DRINK_SHADES[key] ?? FALLBACK_SHADES[fallbackIndex % FALLBACK_SHADES.length];
 }
 
+// Single source of truth for "is this a coffee item" — used by the
+// Analytics tab's "Daily Coffee Sales" view to separate coffee drinks from
+// anything else on the menu (pastries, bottled water, etc). Deliberately
+// the same known-drink list that drives the mug/"Favourite Drink" shading
+// above, so the two features never disagree about what counts as coffee.
+// A manager-added drink this app has never seen before won't match here
+// (it'll fall back to a FALLBACK_SHADES color in the mug, but it also won't
+// show up as its own coffee column until it's added to DRINK_SHADES).
+export function isCoffeeDrink(rawName: string): boolean {
+  const key = normalizeDrinkName(rawName).toLowerCase();
+  return key in DRINK_SHADES;
+}
+
 export function computeDrinkBreakdown(
   sales: { description: string | null; quantity: number | null }[]
 ): { slices: DrinkSlice[]; favorite: string | null } {

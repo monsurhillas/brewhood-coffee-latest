@@ -93,4 +93,27 @@ export const SCHEMA_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_invoices_employee ON invoices(employee_id)`,
   `CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(created_at)`,
+  // Salary tab — see ensureSalaryTables() in db.ts for the full rationale;
+  // kept in sync here so a fresh /api/init run creates these too.
+  `ALTER TABLE employees ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2)`,
+  `CREATE TABLE IF NOT EXISTS salary_advances (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    amount NUMERIC(10,2) NOT NULL,
+    note TEXT,
+    month TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS salary_payments (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    month TEXT NOT NULL,
+    salary_amount NUMERIC(10,2) NOT NULL,
+    advances_amount NUMERIC(10,2) NOT NULL,
+    amount_paid NUMERIC(10,2) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(employee_id, month)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_salary_advances_employee_month ON salary_advances(employee_id, month)`,
+  `CREATE INDEX IF NOT EXISTS idx_salary_payments_employee_month ON salary_payments(employee_id, month)`,
 ];
