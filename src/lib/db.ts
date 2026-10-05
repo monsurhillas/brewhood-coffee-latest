@@ -161,5 +161,73 @@ export async function ensureSalaryTables(): Promise<void> {
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`);
+
+  // Salary entries supersede salary_payments: one row per staff member per
+  // settlement month with the salary/advance figures, a paid/partial/unpaid
+  // status, and the payment date + medium. Every taka actually paid out is
+  // mirrored into manager_costs (category "Salary") at its payment date —
+  // see lib/salaryEntries.ts — so the cost reports stay the single source of
+  // truth. salary_payments is left in place, untouched and no longer read.
+  const entriesCheck = (await db.query(`SELECT to_regclass('public.salary_entries') AS reg`)) as {
+    reg: string | null;
+  }[];
+  const firstRunOfEntries = !entriesCheck[0]?.reg;
+  await ensureCostColumns();
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS salary_entries (
+      id SERIAL PRIMARY KEY,
+      staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+      month TEXT NOT NULL,
+      salary_amount NUMERIC(10,2) NOT NULL,
+      advance_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      amount_paid NUMERIC(10,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'unpaid',
+      payment_date DATE,
+      payment_method TEXT,
+      note TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(staff_id, month)
+    )
+  `);
+  if (firstRunOfEntries) {
+    // One-time carry-over of anything already marked "paid" with the old
+    // Pay Salary button, so it shows up in history and in manager costs.
+    // Only runs on the very run that creates salary_entries, so it can never
+    // duplicate rows later.
+    await db.query(`
+      INSERT INTO salary_entries
+        (staff_id, month, salary_amount, advance_amount, amount_paid, status, payment_date, payment_method, created_at)
+      SELECT staff_id, month, salary_amount, advances_amount, amount_paid, 'paid',
+             (created_at AT TIME ZONE 'Asia/Dhaka')::date, 'cash', created_at
+      FROM salary_payments
+      ON CONFLICT (staff_id, month) DO NOTHING
+    `);
+    await db.query(`
+      INSERT INTO manager_costs (category, amount, note, created_at, payment_method, salary_entry_id)
+      SELECT 'Salary', se.amount_paid, 'Salary - ' || s.name || ' (' || se.month || ')',
+             se.created_at, 'cash', se.id
+      FROM salary_entries se JOIN staff s ON s.id = se.staff_id
+      WHERE se.amount_paid > 0
+    `);
+  }
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_entries_month ON salary_entries(month)`);
   _salaryTablesEnsured = true;
+}
+
+// Self-healing lazy migration (same pattern as ensureUploadedAtColumn):
+// how a manager cost was paid (cash / bkash / bank — null on older rows,
+// shown as "—"), and which salary entry (if any) a cost row was posted from.
+let _costColumnsEnsured = false;
+export async function ensureCostColumns(): Promise<void> {
+  if (_costColumnsEnsured) return;
+  const db = sql();
+  await db.query(`ALTER TABLE manager_costs ADD COLUMN IF NOT EXISTS payment_method TEXT`);
+  await db.query(`ALTER TABLE manager_costs ADD COLUMN IF NOT EXISTS salary_entry_id INTEGER`);
+  _costColumnsEnsured = true;
+}
+
+export const PAYMENT_METHODS = ["cash", "bkash", "bank"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export function isPaymentMethod(v: unknown): v is PaymentMethod {
+  return typeof v === "string" && (PAYMENT_METHODS as readonly string[]).includes(v);
 }

@@ -124,6 +124,25 @@ export const SCHEMA_STATEMENTS = [
     created_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(staff_id, month)
   )`,
+  // Payment medium on manager costs + link back to the salary entry a cost
+  // was posted from (see ensureCostColumns() / ensureSalaryTables() in db.ts).
+  `ALTER TABLE manager_costs ADD COLUMN IF NOT EXISTS payment_method TEXT`,
+  `ALTER TABLE manager_costs ADD COLUMN IF NOT EXISTS salary_entry_id INTEGER`,
+  `CREATE TABLE IF NOT EXISTS salary_entries (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    month TEXT NOT NULL,
+    salary_amount NUMERIC(10,2) NOT NULL,
+    advance_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+    amount_paid NUMERIC(10,2) NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'unpaid',
+    payment_date DATE,
+    payment_method TEXT,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(staff_id, month)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_salary_entries_month ON salary_entries(month)`,
   `CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`,
   `CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`,
 ];
