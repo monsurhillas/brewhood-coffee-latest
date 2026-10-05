@@ -3,14 +3,34 @@
 import { useEffect, useState } from "react";
 import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
+import EntryDateBar from "@/components/dashboard/EntryDateBar";
+import { useEntryDate } from "@/lib/useEntryDate";
 import { formatMoney, formatDate } from "@/lib/format";
 
-type CostRow = { id: number; category: string; amount: number; note: string | null; created_at: string };
+type CostRow = {
+  id: number;
+  category: string;
+  amount: number;
+  note: string | null;
+  payment_method: string | null;
+  created_at: string;
+};
 
 const CATEGORIES = ["Beans", "Milk", "Salary", "Maintenance", "Others"];
+const METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bkash", label: "bKash" },
+  { value: "bank", label: "Bank" },
+];
+
+function methodLabel(m: string | null): string {
+  return METHODS.find((x) => x.value === m)?.label ?? "—";
+}
 
 export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
+  const entryDate = useEntryDate();
   const [category, setCategory] = useState(CATEGORIES[0]);
+  const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,12 +58,21 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
     const res = await fetch("/api/costs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category, amount: Number(amount), note }),
+      body: JSON.stringify({
+        category,
+        amount: Number(amount),
+        note,
+        payment_method: method,
+        entry_date: entryDate.date,
+      }),
     });
     setSaving(false);
 
     if (res.ok) {
-      setMessage({ type: "success", text: "Cost recorded." });
+      setMessage({
+        type: "success",
+        text: entryDate.isBackdated ? `Cost recorded for ${entryDate.date}.` : "Cost recorded.",
+      });
       setAmount("");
       setNote("");
       loadRecent();
@@ -62,6 +91,8 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
       >
         <h2 className="font-medium">Manager Cost</h2>
 
+        <EntryDateBar entryDate={entryDate} />
+
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Category</label>
           <ThemedSelect
@@ -69,6 +100,11 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
             onChange={setCategory}
             options={CATEGORIES.map((c) => ({ value: c, label: c }))}
           />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Paid via</label>
+          <ThemedSelect value={method} onChange={setMethod} options={METHODS} />
         </div>
 
         <div>
@@ -121,27 +157,31 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
                   </div>
                   <div className="mt-1 flex flex-col gap-0.5 text-xs text-[var(--muted)]">
                     <p className="truncate">{r.note ?? "—"}</p>
-                    <p>{formatDate(r.created_at)}</p>
+                    <p>
+                      {formatDate(r.created_at)} · {methodLabel(r.payment_method)}
+                    </p>
                   </div>
                 </li>
               ))}
             </ul>
             <div className="scroll-fade-x hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[420px] text-sm">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
-                    <th className="pb-2">Category</th>
-                    <th className="pb-2">Note</th>
-                    <th className="pb-2 text-right">Amount</th>
+                    <th className="pb-2 pr-3">Category</th>
+                    <th className="pb-2 pr-3">Note</th>
+                    <th className="pb-2 pr-3">Paid via</th>
+                    <th className="pb-2 pr-3 text-right">Amount</th>
                     <th className="pb-2 text-right">When</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recent.map((r) => (
                     <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
-                      <td className="py-2">{r.category}</td>
-                      <td className="py-2 text-[var(--muted)]">{r.note ?? "—"}</td>
-                      <td className="py-2 text-right">{formatMoney(r.amount)}</td>
+                      <td className="py-2 pr-3">{r.category}</td>
+                      <td className="py-2 pr-3 text-[var(--muted)]">{r.note ?? "—"}</td>
+                      <td className="py-2 pr-3 text-[var(--muted)]">{methodLabel(r.payment_method)}</td>
+                      <td className="py-2 pr-3 text-right">{formatMoney(r.amount)}</td>
                       <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
                     </tr>
                   ))}
