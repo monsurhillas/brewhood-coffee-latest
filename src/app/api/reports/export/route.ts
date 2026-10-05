@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, ensureCostColumns } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { toCsv } from "@/lib/csv";
 
@@ -74,18 +74,20 @@ export async function GET(request: NextRequest) {
       ])
     );
   } else if (type === "costs") {
+    await ensureCostColumns();
     const rows = await db`
-      SELECT created_at, category, amount::float8, note FROM manager_costs
+      SELECT created_at, category, amount::float8, note, payment_method FROM manager_costs
       WHERE (${fromTs}::timestamptz IS NULL OR created_at >= ${fromTs}::timestamptz)
         AND (${toTs}::timestamptz IS NULL OR created_at <= ${toTs}::timestamptz)
       ORDER BY created_at DESC
     `;
     csv = toCsv(
-      ["Date", "Category", "Amount", "Note"],
+      ["Date", "Category", "Amount", "Paid Via", "Note"],
       rows.map((r) => [
         new Date(r.created_at as string).toISOString(),
         r.category as string,
         r.amount as number,
+        (r.payment_method as string) ?? "",
         (r.note as string) ?? "",
       ])
     );
