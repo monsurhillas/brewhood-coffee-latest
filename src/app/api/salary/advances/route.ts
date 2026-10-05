@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
   const db = sql();
 
   const [already] = await db`
-    SELECT id FROM salary_payments WHERE staff_id = ${staffId} AND month = ${month} LIMIT 1
+    SELECT id FROM salary_entries
+    WHERE staff_id = ${staffId} AND month = ${month} AND status = 'paid' LIMIT 1
   `;
   if (already) {
     return NextResponse.json(
