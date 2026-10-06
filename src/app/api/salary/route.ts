@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql, ensureSalaryTables } from "@/lib/db";
+import { sql } from "@/lib/db";
+import { ensureSalaryReady } from "@/lib/salaryEntries";
 import { requireTab } from "@/lib/session";
 import { currentMonthInDhaka, isValidMonthString } from "@/lib/salaryMonth";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   const monthParam = request.nextUrl.searchParams.get("month");
   const month = isValidMonthString(monthParam) ? monthParam : currentMonthInDhaka();
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const db = sql();
 
   const rows = await db`
