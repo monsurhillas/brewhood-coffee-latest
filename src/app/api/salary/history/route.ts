@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { sql, ensureSalaryTables } from "@/lib/db";
+import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { monthLabel } from "@/lib/salaryMonth";
-import { listSalaryEntries, type SalaryEntryRow } from "@/lib/salaryEntries";
+import { listSalaryEntries, ensureSalaryReady, type SalaryEntryRow } from "@/lib/salaryEntries";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export async function GET() {
   const { response } = await requireTab("salary");
   if (response) return response;
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const db = sql();
 
   const payments = (await db`
