@@ -14,6 +14,7 @@ type Payment = {
   date: string; // YYYY-MM-DD, Dhaka
   month: string;
   entry_id: number | null;
+  advance_id: number | null; // set when counted as a staff advance
   staff_name: string | null;
 };
 
@@ -21,8 +22,10 @@ type Payment = {
 // row in the "Salary" category — the ones posted from salary entries AND
 // everything logged by hand in the Manager Cost tab before this existed.
 // A hand-logged row has no entry, so it's filed under the month of its own
-// date; an entry's rows are filed under the entry's settlement month (paying
-// September's salary on 5 October is still September's).
+// date — unless it was assigned to a staff member as an advance, in which case
+// it follows the settlement month chosen then; an entry's rows are filed under
+// the entry's settlement month (paying September's salary on 5 October is
+// still September's).
 export async function GET() {
   const { response } = await requireTab("salary");
   if (response) return response;
@@ -33,11 +36,13 @@ export async function GET() {
   const payments = (await db`
     SELECT mc.id, mc.amount::float8 AS amount, mc.note, mc.payment_method,
            to_char(mc.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') AS date,
-           COALESCE(se.month, to_char(mc.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM')) AS month,
-           se.id AS entry_id, s.name AS staff_name
+           COALESCE(se.month, adv.month, to_char(mc.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM')) AS month,
+           se.id AS entry_id, adv.id AS advance_id, COALESCE(s.name, sa.name) AS staff_name
     FROM manager_costs mc
     LEFT JOIN salary_entries se ON se.id = mc.salary_entry_id
     LEFT JOIN staff s ON s.id = se.staff_id
+    LEFT JOIN salary_advances adv ON adv.cost_id = mc.id
+    LEFT JOIN staff sa ON sa.id = adv.staff_id
     WHERE lower(mc.category) = 'salary'
     ORDER BY mc.created_at DESC, mc.id DESC
     LIMIT 2000
