@@ -118,6 +118,8 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
 
   const [advanceOpenId, setAdvanceOpenId] = useState<number | null>(null);
   const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceDate, setAdvanceDate] = useState(todayInDhaka());
+  const [advanceMethod, setAdvanceMethod] = useState("cash");
   const [advanceSaving, setAdvanceSaving] = useState(false);
   const [advanceError, setAdvanceError] = useState<string | null>(null);
 
@@ -277,12 +279,19 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     const res = await fetch("/api/salary/advances", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ staff_id: s.id, amount, month }),
+      body: JSON.stringify({
+        staff_id: s.id,
+        amount,
+        month,
+        date: advanceDate,
+        payment_method: advanceMethod,
+      }),
     });
     setAdvanceSaving(false);
     if (res.ok) {
       setAdvanceOpenId(null);
       setAdvanceAmount("");
+      setAdvanceDate(todayInDhaka());
       load();
       if (expandedId === s.id) loadAdvanceDetails(s.id);
       onSaved?.();
@@ -668,7 +677,12 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Advance payment</label>
+            <label
+              className="mb-1 block text-xs font-medium text-[var(--muted)]"
+              title="Counts as salary paid out — posted to Manager Cost if it isn't there yet"
+            >
+              Advance payment
+            </label>
             <input
               type="number"
               step="0.01"
@@ -838,6 +852,17 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                             onKeyDown={(ev) => ev.key === "Enter" && submitAdvance(s)}
                             className="w-36 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm outline-none focus:border-[var(--brand)]"
                           />
+                          <input
+                            type="date"
+                            value={advanceDate}
+                            max={todayInDhaka()}
+                            onChange={(ev) => setAdvanceDate(ev.target.value)}
+                            title="Date the advance was given"
+                            className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm outline-none focus:border-[var(--brand)]"
+                          />
+                          <div className="w-28">
+                            <ThemedSelect value={advanceMethod} onChange={setAdvanceMethod} options={METHOD_OPTIONS} />
+                          </div>
                           <button
                             onClick={() => submitAdvance(s)}
                             disabled={advanceSaving}
@@ -854,6 +879,9 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                           >
                             Cancel
                           </button>
+                          <p className="w-full text-xs text-[var(--muted)]">
+                            Also posted to Manager Cost (Salary) on that date.
+                          </p>
                           {advanceError && <p className="text-xs text-red-500">{advanceError}</p>}
                         </div>
                       </td>

@@ -17,6 +17,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import ThemedSelect from "@/components/dashboard/ThemedSelect";
 import { formatMoney, formatDay } from "@/lib/format";
 import { currentMonthInDhaka, monthLabel } from "@/lib/salaryMonth";
 
@@ -33,6 +34,7 @@ type Analytics = {
     advance: number;
   };
   costBreakdown: { category: string; total: number }[];
+  costMonths: { month: string; label: string; total: number; categories: { category: string; total: number }[] }[];
   topProducts: { sku_name: string; units_sold: number; revenue: number }[];
   employeeActivity: {
     id: number;
@@ -109,6 +111,15 @@ function ViewTabButton({
 
 function AnalyticsOverview({ data }: { data: Analytics }) {
   const { totals } = data;
+
+  // Cost Breakdown can be filtered to one month ("October 2026: Salary ৳11,000").
+  // Starts on the current month when it has costs, otherwise on all time.
+  const [costMonth, setCostMonth] = useState<string>(() =>
+    data.costMonths.some((m) => m.month === currentMonthInDhaka()) ? currentMonthInDhaka() : "all"
+  );
+  const monthCosts = data.costMonths.find((m) => m.month === costMonth);
+  const costRows = monthCosts ? monthCosts.categories : data.costBreakdown;
+  const costTotal = costRows.reduce((sum, c) => sum + c.total, 0);
 
   const weekdayChartData = data.weekdaySeasonality.map((w) => ({
     label: WEEKDAY_LABELS[w.weekday] ?? String(w.weekday),
@@ -202,22 +213,35 @@ function AnalyticsOverview({ data }: { data: Analytics }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ChartCard title="Cost Breakdown" subtitle="By category">
-          {data.costBreakdown.length === 0 ? (
+        <ChartCard
+          title="Cost Breakdown"
+          subtitle={monthCosts ? monthCosts.label : "All time"}
+        >
+          <div className="mb-3 w-48">
+            <ThemedSelect
+              value={costMonth}
+              onChange={setCostMonth}
+              options={[
+                { value: "all", label: "All time" },
+                ...data.costMonths.map((m) => ({ value: m.month, label: m.label })),
+              ]}
+            />
+          </div>
+          {costRows.length === 0 ? (
             <EmptyChart text="No costs logged yet." />
           ) : (
             <div className="flex flex-col items-center gap-4 sm:flex-row">
               <ResponsiveContainer width="100%" height={220} className="sm:w-1/2">
                 <PieChart>
                   <Pie
-                    data={data.costBreakdown}
+                    data={costRows}
                     dataKey="total"
                     nameKey="category"
                     innerRadius={50}
                     outerRadius={80}
                     paddingAngle={2}
                   >
-                    {data.costBreakdown.map((_, i) => (
+                    {costRows.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
@@ -225,7 +249,7 @@ function AnalyticsOverview({ data }: { data: Analytics }) {
                 </PieChart>
               </ResponsiveContainer>
               <ul className="flex w-full flex-col gap-2 sm:w-1/2">
-                {data.costBreakdown.map((c, i) => (
+                {costRows.map((c, i) => (
                   <li key={c.category} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
                       <span
@@ -237,6 +261,10 @@ function AnalyticsOverview({ data }: { data: Analytics }) {
                     <span className="font-medium">{formatMoney(c.total)}</span>
                   </li>
                 ))}
+                <li className="mt-1 flex items-center justify-between border-t border-[var(--border)] pt-2 text-sm font-medium">
+                  <span>Total</span>
+                  <span>{formatMoney(costTotal)}</span>
+                </li>
               </ul>
             </div>
           )}
