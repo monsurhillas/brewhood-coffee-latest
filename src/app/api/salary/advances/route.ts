@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql, ensureSalaryTables } from "@/lib/db";
+import { sql, isPaymentMethod } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { currentMonthInDhaka, isValidMonthString } from "@/lib/salaryMonth";
+import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
+import { addAdvance, ensureSalaryReady } from "@/lib/salaryEntries";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "staff_id is required." }, { status: 400 });
   }
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const db = sql();
   const advances = await db`
     SELECT id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
@@ -31,7 +33,9 @@ export async function GET(request: NextRequest) {
 }
 
 // Records an advance against a staff member's payable for a month. Two ways:
-//   - { staff_id, amount, month }  a new advance, as before;
+//   - { staff_id, amount, month, date?, payment_method? }  a new advance. It is
+//     real money out, so it is also posted to Manager Cost under "Salary" at
+//     that date (default today) and medium (default cash);
 //   - { staff_id, cost_id, month } count money that was ALREADY paid out and
 //     logged as a "Salary" cost in Manager Cost. The amount and date come
 //     from that cost row, the month is the settlement month you choose (the
@@ -51,8 +55,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "staff_id is required." }, { status: 400 });
   }
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const db = sql();
+
+  const method = body?.payment_method ?? "cash";
+  if (!isPaymentMethod(method)) {
+    return NextResponse.json({ error: "Payment medium must be cash, bkash or bank." }, { status: 400 });
+  }
+  let advanceTs: string | null = null;
+  if (body?.date !== undefined && body?.date !== null && body?.date !== "") {
+    if (!isValidDateString(body.date) || isFutureDateString(body.date)) {
+      return NextResponse.json({ error: "Advance date can't be in the future." }, { status: 400 });
+    }
+    advanceTs = dateStringToTimestamp(body.date);
+  }
 
   let amount = Number(body?.amount);
   let note: string | null = body?.note ?? null;
@@ -116,16 +132,18 @@ export async function POST(request: NextRequest) {
     await db`UPDATE salary_entries SET advance_amount = ${newAdvance} WHERE id = ${entry.id}`;
   }
 
-  const rows = createdAt
-    ? await db`
-        INSERT INTO salary_advances (staff_id, amount, note, month, created_at, cost_id)
-        VALUES (${staffId}, ${amount}, ${note}, ${month}, ${createdAt}, ${costId})
-        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
-      `
-    : await db`
-        INSERT INTO salary_advances (staff_id, amount, note, month)
-        VALUES (${staffId}, ${amount}, ${note}, ${month})
-        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
-      `;
-  return NextResponse.json({ advance: rows[0] }, { status: 201 });
+  const [member] = (await db`SELECT name FROM staff WHERE id = ${staffId}`) as { name: string }[];
+  if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
+
+  const advance = await addAdvance({
+    staffId,
+    staffName: member.name,
+    month,
+    amount,
+    createdAt: costId !== null ? createdAt : advanceTs,
+    method,
+    note,
+    linkCostId: costId,
+  });
+  return NextResponse.json({ advance }, { status: 201 });
 }
