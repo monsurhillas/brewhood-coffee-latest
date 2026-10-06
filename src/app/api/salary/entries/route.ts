@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql, ensureSalaryTables } from "@/lib/db";
+import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { isValidMonthString } from "@/lib/salaryMonth";
-import { normalizeEntry, getSalaryEntry, syncSalaryCosts } from "@/lib/salaryEntries";
+import {
+  normalizeEntry,
+  getSalaryEntry,
+  syncSalaryCosts,
+  advanceShortfallError,
+  reconcileEntryAdvances,
+  ensureSalaryReady,
+} from "@/lib/salaryEntries";
 
 export const dynamic = "force-dynamic";
 
 // Creates one staff member's salary entry for a settlement month. Anything
 // actually paid (status paid / partial) is posted to Manager Cost under
-// "Salary" at the payment date — see lib/salaryEntries.ts.
+// "Salary" at the payment date, and so is any advance that wasn't recorded
+// yet — see lib/salaryEntries.ts.
 export async function POST(request: NextRequest) {
   const { response } = await requireTab("salary");
   if (response) return response;
@@ -23,11 +31,14 @@ export async function POST(request: NextRequest) {
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const v = parsed.value;
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const db = sql();
 
   const [member] = await db`SELECT id FROM staff WHERE id = ${staffId}`;
   if (!member) return NextResponse.json({ error: "Staff member not found." }, { status: 404 });
+
+  const shortfall = await advanceShortfallError(staffId, body.month, v.advance_amount);
+  if (shortfall) return NextResponse.json({ error: shortfall }, { status: 400 });
 
   const rows = await db`
     INSERT INTO salary_entries
@@ -46,6 +57,9 @@ export async function POST(request: NextRequest) {
   }
 
   const entry = await getSalaryEntry(rows[0].id as number);
-  if (entry) await syncSalaryCosts(entry);
+  if (entry) {
+    await syncSalaryCosts(entry);
+    await reconcileEntryAdvances(entry);
+  }
   return NextResponse.json({ entry }, { status: 201 });
 }
