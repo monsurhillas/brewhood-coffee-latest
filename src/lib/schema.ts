@@ -143,6 +143,7 @@ export const SCHEMA_STATEMENTS = [
     UNIQUE(staff_id, month)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_salary_entries_month ON salary_entries(month)`,
+  `ALTER TABLE salary_advances ADD COLUMN IF NOT EXISTS cost_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`,
   `CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`,
 ];

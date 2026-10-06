@@ -159,6 +159,10 @@ export async function ensureSalaryTables(): Promise<void> {
       UNIQUE(staff_id, month)
     )
   `);
+  // An advance can point at an existing Manager Cost row (cost_id) — money
+  // already paid out and logged as a Salary cost — so it counts against that
+  // month's payable without posting a second cost.
+  await db.query(`ALTER TABLE salary_advances ADD COLUMN IF NOT EXISTS cost_id INTEGER`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`);
 
