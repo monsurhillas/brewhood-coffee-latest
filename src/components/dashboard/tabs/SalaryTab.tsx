@@ -49,6 +49,7 @@ type HistoryPayment = {
   payment_method: string | null;
   date: string;
   entry_id: number | null;
+  advance_id: number | null;
   staff_name: string | null;
 };
 
@@ -90,7 +91,7 @@ function StatusBadge({ status, amount }: { status: SalaryStatus | null; amount?:
   );
 }
 
-type AdvanceRow = { id: number; amount: number; note: string | null; created_at: string };
+type AdvanceRow = { id: number; amount: number; note: string | null; created_at: string; cost_id: number | null };
 
 // Three compact sections, as requested: Staff (create/manage the shop's own
 // internal employees first), Salary Configuration (set each staff member's
@@ -142,6 +143,13 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  // "Count as advance" on a Salary payment already logged in Manager Cost.
+  const [assignCostId, setAssignCostId] = useState<number | null>(null);
+  const [assignStaffId, setAssignStaffId] = useState("");
+  const [assignMonth, setAssignMonth] = useState(currentMonthInDhaka());
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   function loadStaff() {
     fetch(`/api/salary?month=${month}`)
@@ -409,6 +417,37 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     resetForm();
     load();
     onSaved?.();
+  }
+
+  function openAssign(pm: HistoryPayment, month: string) {
+    setAssignCostId(pm.id);
+    setAssignStaffId("");
+    setAssignMonth(month);
+    setAssignError(null);
+  }
+
+  async function submitAssign() {
+    if (assignCostId === null) return;
+    if (!assignStaffId) {
+      setAssignError("Pick a staff member.");
+      return;
+    }
+    setAssignSaving(true);
+    setAssignError(null);
+    const res = await fetch("/api/salary/advances", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staff_id: Number(assignStaffId), month: assignMonth, cost_id: assignCostId }),
+    });
+    setAssignSaving(false);
+    if (res.ok) {
+      setAssignCostId(null);
+      load();
+      onSaved?.();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setAssignError(data.error ?? "Failed to assign payment.");
+    }
   }
 
   async function removeEntry(id: number) {
@@ -832,6 +871,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                               <li key={a.id} className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
                                 <span>
                                   {formatDate(a.created_at)} {a.note ? `— ${a.note}` : ""}
+                                  {a.cost_id ? " · from Manager Cost" : ""}
                                 </span>
                                 <span className="flex items-center gap-2">
                                   <span className="font-medium text-[var(--foreground)]">{formatMoney(a.amount)}</span>
@@ -839,7 +879,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                                     onClick={() => deleteAdvance(a.id, s.id)}
                                     className="text-red-500 hover:underline"
                                   >
-                                    Remove
+                                    {a.cost_id ? "Unlink" : "Remove"}
                                   </button>
                                 </span>
                               </li>
@@ -947,14 +987,80 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                             </tr>
                           </thead>
                           <tbody>
-                            {m.payments.map((pm) => (
-                              <tr key={pm.id} className="border-b border-[var(--border)] last:border-0">
-                                <td className="py-2 whitespace-nowrap">{formatDay(`${pm.date.slice(0, 10)}T12:00:00`)}</td>
-                                <td className="py-2">{pm.staff_name ?? pm.note ?? "Salary"}</td>
-                                <td className="py-2 text-[var(--muted)]">{methodLabel(pm.payment_method)}</td>
-                                <td className="py-2 text-right font-medium">{formatMoney(pm.amount)}</td>
-                              </tr>
-                            ))}
+                            {m.payments.map((pm) => {
+                              const unassigned = pm.entry_id === null && pm.advance_id === null;
+                              return (
+                                <Fragment key={pm.id}>
+                                  <tr className="border-b border-[var(--border)] last:border-0">
+                                    <td className="py-2 whitespace-nowrap">{formatDay(`${pm.date.slice(0, 10)}T12:00:00`)}</td>
+                                    <td className="py-2">
+                                      {pm.staff_name ?? pm.note ?? "Salary"}
+                                      {pm.advance_id !== null && (
+                                        <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                                          Advance
+                                        </span>
+                                      )}
+                                      {unassigned && (
+                                        <button
+                                          type="button"
+                                          onClick={() => (assignCostId === pm.id ? setAssignCostId(null) : openAssign(pm, m.month))}
+                                          className="ml-2 text-xs font-medium text-[var(--brand)] hover:underline"
+                                        >
+                                          Count as advance
+                                        </button>
+                                      )}
+                                    </td>
+                                    <td className="py-2 text-[var(--muted)]">{methodLabel(pm.payment_method)}</td>
+                                    <td className="py-2 text-right font-medium">{formatMoney(pm.amount)}</td>
+                                  </tr>
+                                  {assignCostId === pm.id && (
+                                    <tr className="border-b border-[var(--border)] bg-black/5 last:border-0 dark:bg-white/5">
+                                      <td colSpan={4} className="px-2 py-2.5">
+                                        <div className="flex flex-wrap items-end gap-2">
+                                          <div className="w-44">
+                                            <label className="mb-1 block text-xs text-[var(--muted)]">Staff</label>
+                                            <ThemedSelect
+                                              value={assignStaffId}
+                                              onChange={setAssignStaffId}
+                                              placeholder="Select staff…"
+                                              options={(staff ?? []).map((x) => ({ value: String(x.id), label: x.name }))}
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="mb-1 block text-xs text-[var(--muted)]">Settlement month</label>
+                                            <input
+                                              type="month"
+                                              value={assignMonth}
+                                              onChange={(e) => e.target.value && setAssignMonth(e.target.value)}
+                                              className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                                            />
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={submitAssign}
+                                            disabled={assignSaving}
+                                            className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
+                                          >
+                                            {assignSaving ? "Saving…" : "Count as advance"}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setAssignCostId(null)}
+                                            className="text-xs text-[var(--muted)] hover:underline"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                        <p className="mt-1.5 text-xs text-[var(--muted)]">
+                                          Deducts {formatMoney(pm.amount)} from that staff member&apos;s payable for the month you pick. It stays in Manager Cost — nothing is posted twice.
+                                        </p>
+                                        {assignError && <p className="mt-1 text-xs text-red-500">{assignError}</p>}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
