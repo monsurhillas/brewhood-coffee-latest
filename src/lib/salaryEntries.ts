@@ -13,7 +13,7 @@
 // as its OWN cost row on its own date rather than rewriting the date of the
 // earlier one — see syncSalaryCosts.
 
-import { sql, isPaymentMethod, type PaymentMethod } from "@/lib/db";
+import { sql, ensureSalaryTables, isPaymentMethod, type PaymentMethod } from "@/lib/db";
 import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
 import { monthLabel } from "@/lib/salaryMonth";
 
@@ -175,4 +175,174 @@ export async function deleteSalaryEntry(id: number): Promise<void> {
   const db = sql();
   await db`DELETE FROM manager_costs WHERE salary_entry_id = ${id}`;
   await db`DELETE FROM salary_entries WHERE id = ${id}`;
+}
+
+// ---------------------------------------------------------------------------
+// Advances <-> Manager Cost
+//
+// An advance is money that has really left the till, so every advance is
+// backed by a Manager Cost row (category "Salary"), linked through
+// salary_advances.cost_id. That is what makes a month's Manager Cost total
+// for salary = advances + settlement payments. The cost row can be either
+// one posted here, or an existing hand-logged Salary cost that gets linked.
+// ---------------------------------------------------------------------------
+
+export type AdvanceInput = {
+  staffId: number;
+  staffName: string;
+  month: string; // settlement month YYYY-MM
+  amount: number;
+  createdAt: string | null; // ISO timestamp, null = now
+  method: PaymentMethod;
+  note: string | null;
+  linkCostId?: number | null; // use this existing cost row
+  matchExisting?: boolean; // reuse an equal-amount unassigned Salary cost, if any
+};
+
+// A hand-logged Salary cost that isn't tied to an entry or an advance yet.
+async function findUnassignedSalaryCost(amount: number): Promise<{ id: number; created_at: string } | null> {
+  const rows = (await sql()`
+    SELECT mc.id, mc.created_at
+    FROM manager_costs mc
+    WHERE lower(mc.category) = 'salary' AND mc.salary_entry_id IS NULL AND mc.amount = ${amount}
+      AND NOT EXISTS (SELECT 1 FROM salary_advances a WHERE a.cost_id = mc.id)
+    ORDER BY mc.created_at DESC
+    LIMIT 1
+  `) as { id: number; created_at: string }[];
+  return rows[0] ?? null;
+}
+
+export async function addAdvance(input: AdvanceInput) {
+  const db = sql();
+  let costId: number | null = input.linkCostId ?? null;
+  let createdAt = input.createdAt;
+  let autoPosted = false;
+
+  if (costId === null && input.matchExisting) {
+    const found = await findUnassignedSalaryCost(input.amount);
+    if (found) {
+      costId = found.id;
+      createdAt = found.created_at;
+    }
+  }
+  if (costId === null) {
+    const note = `Salary advance - ${input.staffName} (${monthLabel(input.month)})`;
+    const rows = createdAt
+      ? await db`
+          INSERT INTO manager_costs (category, amount, note, payment_method, created_at)
+          VALUES ('Salary', ${input.amount}, ${note}, ${input.method}, ${createdAt})
+          RETURNING id, created_at
+        `
+      : await db`
+          INSERT INTO manager_costs (category, amount, note, payment_method)
+          VALUES ('Salary', ${input.amount}, ${note}, ${input.method})
+          RETURNING id, created_at
+        `;
+    costId = rows[0].id as number;
+    createdAt = rows[0].created_at as string;
+    autoPosted = true;
+  }
+
+  const rows = createdAt
+    ? await db`
+        INSERT INTO salary_advances (staff_id, amount, note, month, created_at, cost_id, cost_auto)
+        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${createdAt}, ${costId}, ${autoPosted})
+        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
+      `
+    : await db`
+        INSERT INTO salary_advances (staff_id, amount, note, month, cost_id, cost_auto)
+        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${costId}, ${autoPosted})
+        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
+      `;
+  return rows[0];
+}
+
+async function advancesTotal(staffId: number, month: string): Promise<number> {
+  const rows = (await sql()`
+    SELECT COALESCE(SUM(amount), 0)::float8 AS total FROM salary_advances
+    WHERE staff_id = ${staffId} AND month = ${month}
+  `) as { total: number }[];
+  return round2(rows[0]?.total ?? 0);
+}
+
+// An entry can't claim less advance than has already been logged for that
+// staff member and month (those advances are real money paid out).
+export async function advanceShortfallError(staffId: number, month: string, advance: number): Promise<string | null> {
+  const total = await advancesTotal(staffId, month);
+  if (advance < total - 0.001) {
+    return `Advances already logged for this month total ${total} — remove them from the Advances list first, or keep the advance at ${total} or more.`;
+  }
+  return null;
+}
+
+// After an entry is saved: if its advance figure is more than the advances
+// logged so far, the difference is an advance that was given but never
+// recorded — record it (and post it to Manager Cost) so the month's salary
+// cost is complete.
+export async function reconcileEntryAdvances(entry: SalaryEntryRow): Promise<void> {
+  const diff = round2(entry.advance_amount - (await advancesTotal(entry.staff_id, entry.month)));
+  if (diff <= 0.001) return;
+  await addAdvance({
+    staffId: entry.staff_id,
+    staffName: entry.staff_name,
+    month: entry.month,
+    amount: diff,
+    createdAt: entry.payment_date ? dateStringToTimestamp(entry.payment_date) : null,
+    method: entry.payment_method ?? "cash",
+    note: null,
+    matchExisting: true,
+  });
+}
+
+// One-time catch-up for data created before advances posted to Manager Cost:
+// every advance without a cost row, and every entry whose advance figure
+// isn't covered by logged advances, gets its cost row. A row in
+// app_migrations is claimed atomically, so concurrent requests can't both run
+// it. If an equal-amount Salary cost was already logged by hand it is linked
+// rather than duplicated.
+let _salaryReady = false;
+export async function ensureSalaryReady(): Promise<void> {
+  if (_salaryReady) return;
+  await ensureSalaryTables();
+  const db = sql();
+  await db`CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, ran_at TIMESTAMPTZ DEFAULT now())`;
+  const claimed = await db`
+    INSERT INTO app_migrations (name) VALUES ('advance_costs_backfill_v1')
+    ON CONFLICT (name) DO NOTHING RETURNING name
+  `;
+  if (claimed.length > 0) {
+    try {
+      const loose = (await db`
+        SELECT a.id, a.amount::float8 AS amount, a.created_at
+        FROM salary_advances a WHERE a.cost_id IS NULL ORDER BY a.id
+      `) as { id: number; amount: number; created_at: string }[];
+      for (const a of loose) {
+        const found = await findUnassignedSalaryCost(a.amount);
+        let costId: number;
+        let auto = false;
+        if (found) {
+          costId = found.id;
+        } else {
+          auto = true;
+          const [st] = (await db`
+            SELECT s.name, adv.month FROM salary_advances adv JOIN staff s ON s.id = adv.staff_id WHERE adv.id = ${a.id}
+          `) as { name: string; month: string }[];
+          const note = `Salary advance - ${st.name} (${monthLabel(st.month)})`;
+          const rows = await db`
+            INSERT INTO manager_costs (category, amount, note, payment_method, created_at)
+            VALUES ('Salary', ${a.amount}, ${note}, 'cash', ${a.created_at}) RETURNING id
+          `;
+          costId = rows[0].id as number;
+        }
+        await db`UPDATE salary_advances SET cost_id = ${costId}, cost_auto = ${auto} WHERE id = ${a.id}`;
+      }
+      const entries = await listSalaryEntries();
+      for (const e of entries) await reconcileEntryAdvances(e);
+    } catch (err) {
+      await db`DELETE FROM app_migrations WHERE name = 'advance_costs_backfill_v1'`;
+      console.error("advance cost backfill failed", err);
+      return; // retried on the next request
+    }
+  }
+  _salaryReady = true;
 }

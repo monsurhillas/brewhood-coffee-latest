@@ -163,6 +163,8 @@ export async function ensureSalaryTables(): Promise<void> {
   // already paid out and logged as a Salary cost — so it counts against that
   // month's payable without posting a second cost.
   await db.query(`ALTER TABLE salary_advances ADD COLUMN IF NOT EXISTS cost_id INTEGER`);
+  // true when the app itself posted that cost row (so removing the advance removes it too)
+  await db.query(`ALTER TABLE salary_advances ADD COLUMN IF NOT EXISTS cost_auto BOOLEAN NOT NULL DEFAULT false`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`);
 
