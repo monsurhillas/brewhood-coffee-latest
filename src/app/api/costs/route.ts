@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, ensureCostColumns, isPaymentMethod } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { ensureSalaryReady } from "@/lib/salaryEntries";
 import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export async function GET() {
   const { response } = await requireTab("cost");
   if (response) return response;
   await ensureCostColumns();
+  await ensureSalaryReady(); // posts any earlier unposted salary advances once
   const db = sql();
   const rows = await db`
     SELECT id, category, amount::float8, note, payment_method, salary_entry_id, created_at
