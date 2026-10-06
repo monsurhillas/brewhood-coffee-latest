@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import { sql, ensureSalaryTables } from "@/lib/db";
+import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
-import { normalizeEntry, getSalaryEntry, syncSalaryCosts, deleteSalaryEntry } from "@/lib/salaryEntries";
+import {
+  normalizeEntry,
+  getSalaryEntry,
+  syncSalaryCosts,
+  deleteSalaryEntry,
+  advanceShortfallError,
+  reconcileEntryAdvances,
+  ensureSalaryReady,
+} from "@/lib/salaryEntries";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +26,16 @@ export async function PATCH(
   const entryId = Number(id);
   const body = await request.json().catch(() => ({}));
 
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   const existing = await getSalaryEntry(entryId);
   if (!existing) return NextResponse.json({ error: "Salary entry not found." }, { status: 404 });
 
   const parsed = normalizeEntry({ ...existing, ...body });
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const v = parsed.value;
+
+  const shortfall = await advanceShortfallError(existing.staff_id, existing.month, v.advance_amount);
+  if (shortfall) return NextResponse.json({ error: shortfall }, { status: 400 });
 
   const db = sql();
   await db`
@@ -36,7 +47,10 @@ export async function PATCH(
   `;
 
   const entry = await getSalaryEntry(entryId);
-  if (entry) await syncSalaryCosts(entry);
+  if (entry) {
+    await syncSalaryCosts(entry);
+    await reconcileEntryAdvances(entry);
+  }
   return NextResponse.json({ entry });
 }
 
@@ -48,7 +62,7 @@ export async function DELETE(
   if (response) return response;
 
   const { id } = await params;
-  await ensureSalaryTables();
+  await ensureSalaryReady();
   await deleteSalaryEntry(Number(id));
   return NextResponse.json({ ok: true });
 }
