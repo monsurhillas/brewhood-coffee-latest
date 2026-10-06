@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { ensureSalaryReady } from "@/lib/salaryEntries";
+import { monthLabel } from "@/lib/salaryMonth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,7 @@ export async function GET() {
   const { response } = await requireTab("analytics");
   if (response) return response;
 
+  await ensureSalaryReady();
   const db = sql();
 
   const [totals] = await db`
@@ -51,6 +54,35 @@ export async function GET() {
     GROUP BY category
     ORDER BY total DESC
   `;
+
+  // Cost by month and category. Salary money is counted in its settlement
+  // month — an entry's payments and an advance's cost row follow the month they
+  // were paid FOR (an October salary paid on 5 Oct or an advance handed over on
+  // 28 Sept both land in October); every other cost uses the month of its date.
+  const costMonthRows = (await db`
+    SELECT COALESCE(se.month, adv.month, to_char(mc.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM')) AS month,
+           mc.category, SUM(mc.amount)::float8 AS total
+    FROM manager_costs mc
+    LEFT JOIN salary_entries se ON se.id = mc.salary_entry_id
+    LEFT JOIN salary_advances adv ON adv.cost_id = mc.id
+    GROUP BY 1, 2
+  `) as { month: string; category: string; total: number }[];
+  const costMonthMap = new Map<
+    string,
+    { month: string; label: string; total: number; categories: { category: string; total: number }[] }
+  >();
+  for (const r of costMonthRows) {
+    let m = costMonthMap.get(r.month);
+    if (!m) {
+      m = { month: r.month, label: monthLabel(r.month), total: 0, categories: [] };
+      costMonthMap.set(r.month, m);
+    }
+    m.categories.push({ category: r.category, total: r.total });
+    m.total += r.total;
+  }
+  const costMonths = [...costMonthMap.values()]
+    .map((m) => ({ ...m, categories: m.categories.sort((a, b) => b.total - a.total) }))
+    .sort((a, b) => (a.month < b.month ? 1 : -1));
 
   const topProducts = await db`
     SELECT sku_name, SUM(quantity)::int AS units_sold, SUM(total)::float8 AS revenue
@@ -134,6 +166,7 @@ export async function GET() {
       advance: totals.advance_net,
     },
     costBreakdown,
+    costMonths,
     topProducts,
     employeeActivity,
     dailyTrend,
