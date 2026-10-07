@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql, ensureCostColumns } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { toCsv } from "@/lib/csv";
+import { ensureCollectionTrxColumn } from "@/lib/collectionTrx";
 
 export const dynamic = "force-dynamic";
 
@@ -54,21 +55,23 @@ export async function GET(request: NextRequest) {
       ])
     );
   } else if (type === "collections") {
+    await ensureCollectionTrxColumn();
     const rows = await db`
-      SELECT c.created_at, e.employee_id, e.name, c.amount::float8, c.method, c.is_contra, c.note
+      SELECT c.created_at, e.employee_id, e.name, c.amount::float8, c.method, c.trx_id, c.is_contra, c.note
       FROM collections c JOIN employees e ON e.id = c.employee_id
       WHERE (${fromTs}::timestamptz IS NULL OR c.created_at >= ${fromTs}::timestamptz)
         AND (${toTs}::timestamptz IS NULL OR c.created_at <= ${toTs}::timestamptz)
       ORDER BY c.created_at DESC
     `;
     csv = toCsv(
-      ["Date", "Employee ID", "Employee", "Amount", "Method", "Contra", "Note"],
+      ["Date", "Employee ID", "Employee", "Amount", "Method", "Trx ID", "Contra", "Note"],
       rows.map((r) => [
         new Date(r.created_at as string).toISOString(),
         r.employee_id as string,
         r.name as string,
         r.amount as number,
         r.method as string,
+        (r.trx_id as string) ?? "",
         r.is_contra ? "Yes" : "No",
         (r.note as string) ?? "",
       ])
@@ -92,20 +95,21 @@ export async function GET(request: NextRequest) {
       ])
     );
   } else if (type === "sales_collections") {
+    await ensureCollectionTrxColumn();
     // A single combined, chronologically-ordered log of sales and
     // collections (contra entries included) — handy when you want one file
     // to reconcile the day instead of stitching two reports together.
     const rows = await db`
       SELECT * FROM (
         SELECT sa.created_at, 'Sale' AS type, e.employee_id, e.name,
-               sa.sku_name AS description, sa.quantity::text AS qty, sa.total::float8 AS amount, sa.note
+               sa.sku_name AS description, sa.quantity::text AS qty, sa.total::float8 AS amount, NULL::text AS trx_id, sa.note
         FROM sales sa JOIN employees e ON e.id = sa.employee_id
         WHERE (${fromTs}::timestamptz IS NULL OR sa.created_at >= ${fromTs}::timestamptz)
           AND (${toTs}::timestamptz IS NULL OR sa.created_at <= ${toTs}::timestamptz)
         UNION ALL
         SELECT c.created_at, CASE WHEN c.is_contra THEN 'Contra' ELSE 'Collection' END AS type,
                e.employee_id, e.name, UPPER(c.method) AS description, NULL::text AS qty,
-               c.amount::float8 AS amount, c.note
+               c.amount::float8 AS amount, c.trx_id, c.note
         FROM collections c JOIN employees e ON e.id = c.employee_id
         WHERE (${fromTs}::timestamptz IS NULL OR c.created_at >= ${fromTs}::timestamptz)
           AND (${toTs}::timestamptz IS NULL OR c.created_at <= ${toTs}::timestamptz)
@@ -113,7 +117,7 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `;
     csv = toCsv(
-      ["Date", "Type", "Employee ID", "Employee", "Description", "Qty", "Amount", "Note"],
+      ["Date", "Type", "Employee ID", "Employee", "Description", "Qty", "Amount", "Trx ID", "Note"],
       rows.map((r) => [
         new Date(r.created_at as string).toISOString(),
         r.type as string,
@@ -122,6 +126,7 @@ export async function GET(request: NextRequest) {
         r.description as string,
         (r.qty as string) ?? "",
         r.amount as number,
+        (r.trx_id as string) ?? "",
         (r.note as string) ?? "",
       ])
     );
