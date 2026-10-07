@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { ensureCollectionTrxColumn } from "@/lib/collectionTrx";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid employee id." }, { status: 400 });
   }
 
+  await ensureCollectionTrxColumn();
   const db = sql();
 
   const rows = await db`
@@ -24,6 +26,7 @@ export async function GET(
         created_at,
         total::float8 AS amount,
         sku_name || ' × ' || quantity AS description,
+        NULL::text AS trx_id,
         note
       FROM sales WHERE employee_id = ${employeeId}
       UNION ALL
@@ -33,6 +36,7 @@ export async function GET(
         created_at,
         amount::float8 AS amount,
         UPPER(method) AS description,
+        trx_id,
         note
       FROM collections WHERE employee_id = ${employeeId}
     ) t
