@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, ensureUploadedAtColumn, BULK_EDIT_WINDOW_DAYS, BULK_UPLOAD_NOTE } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { ensureCollectionTrxColumn } from "@/lib/collectionTrx";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   await ensureUploadedAtColumn();
+  await ensureCollectionTrxColumn();
   const db = sql();
 
   const existingRows = await db`
@@ -86,7 +88,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       method = COALESCE(${nextMethod}, method),
       created_at = CASE WHEN ${nextDate}::date IS NOT NULL THEN (${nextDate}::date + created_at::time) ELSE created_at END
     WHERE id = ${id}
-    RETURNING id, employee_id, amount::float8, method, is_contra, note, created_at, uploaded_at
+    RETURNING id, employee_id, amount::float8, method, is_contra, trx_id, note, created_at, uploaded_at
   `;
 
   return NextResponse.json({ collection: rows[0] });
