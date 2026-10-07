@@ -15,6 +15,7 @@ type CollectionRow = {
   amount: number;
   method: string;
   is_contra: boolean;
+  trx_id: string | null;
   note: string | null;
   created_at: string;
 };
@@ -27,6 +28,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
   const [method, setMethod] = useState("cash");
   const [isContra, setIsContra] = useState(false);
   const [note, setNote] = useState("");
+  const [trxId, setTrxId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<CollectionRow[]>([]);
@@ -58,6 +60,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
         amount: Number(amount),
         method,
         is_contra: isContra,
+        trx_id: method === "cash" ? "" : trxId,
         note,
         entry_date: entryDate.date,
       }),
@@ -73,6 +76,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
       setEmployee(null);
       setAmount("");
       setNote("");
+      setTrxId("");
       setIsContra(false);
       loadRecent();
       onSaved();
@@ -123,8 +127,21 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
           This is a Contra Entry (correction / reversal)
         </label>
 
+        {method !== "cash" && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Trx ID (optional)</label>
+            <input
+              value={trxId}
+              onChange={(e) => setTrxId(e.target.value)}
+              maxLength={64}
+              placeholder={method === "bkash" ? "e.g. bKash TrxID" : "Bank transaction / cheque no."}
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+        )}
+
         <div>
-          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Note (optional)</label>
+          <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Comment / Reference (optional)</label>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -168,18 +185,20 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                     <p className="truncate uppercase">
                       {r.is_contra ? "Contra" : "Collection"} · {r.method}
                     </p>
+                    {r.trx_id && <p className="truncate font-mono normal-case">Trx ID: {r.trx_id}</p>}
                     <p>{formatDate(r.created_at)}</p>
                   </div>
                 </li>
               ))}
             </ul>
             <div className="scroll-fade-x hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[600px] text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
                     <th className="pb-2">Employee</th>
                     <th className="pb-2">Type</th>
                     <th className="pb-2">Method</th>
+                    <th className="pb-2">Trx ID</th>
                     <th className="pb-2 text-right">Amount</th>
                     <th className="pb-2 text-right">When</th>
                   </tr>
@@ -190,6 +209,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                       <td className="py-2">{r.employee_name}</td>
                       <td className="py-2">{r.is_contra ? "Contra" : "Collection"}</td>
                       <td className="py-2 uppercase text-xs">{r.method}</td>
+                      <td className="py-2 font-mono text-xs">{r.trx_id || <span className="text-[var(--muted)]">—</span>}</td>
                       <td className="py-2 text-right">{formatMoney(r.amount)}</td>
                       <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
                     </tr>

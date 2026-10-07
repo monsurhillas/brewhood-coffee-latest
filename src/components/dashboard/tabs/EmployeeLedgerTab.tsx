@@ -25,6 +25,7 @@ type Transaction = {
   unit_price: number | null;
   amount: number;
   method: string | null;
+  trx_id: string | null;
   note: string | null;
   counted: boolean;
   balance_after: number | null;
@@ -152,7 +153,7 @@ export default function EmployeeLedgerTab() {
       if (from && t.date < `${from}T00:00:00.000Z`) return false;
       if (to && t.date > `${to}T23:59:59.999Z`) return false;
       if (query) {
-        const hay = `${t.description ?? ""} ${t.method ?? ""} ${t.note ?? ""} ${t.type}`.toLowerCase();
+        const hay = `${t.description ?? ""} ${t.method ?? ""} ${t.trx_id ?? ""} ${t.note ?? ""} ${t.type}`.toLowerCase();
         if (!hay.includes(query.toLowerCase())) return false;
       }
       return true;
@@ -304,7 +305,7 @@ export default function EmployeeLedgerTab() {
               />
             </div>
             <div className="flex-1 min-w-[160px]">
-              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Filter (item, method, note)</label>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Filter (item, method, Trx ID, note)</label>
               <input
                 type="text"
                 value={query}
@@ -338,6 +339,7 @@ export default function EmployeeLedgerTab() {
                   <th className="px-3 py-2">When</th>
                   <th className="px-3 py-2">Type</th>
                   <th className="px-3 py-2">Details</th>
+                  <th className="px-3 py-2">Trx ID</th>
                   <th className="px-3 py-2 text-right">Amount</th>
                   <th className="px-3 py-2 text-right">Balance After</th>
                   <th className="px-3 py-2">Note</th>
@@ -346,7 +348,7 @@ export default function EmployeeLedgerTab() {
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-[var(--muted)]">
+                    <td colSpan={7} className="px-3 py-6 text-center text-[var(--muted)]">
                       No transactions match these filters.
                     </td>
                   </tr>
@@ -372,6 +374,7 @@ export default function EmployeeLedgerTab() {
                         ? `${t.description} × ${t.quantity} @ ${formatMoney(t.unit_price ?? 0)}`
                         : `${(t.method ?? "").toUpperCase()}${t.type === "contra" ? " (reversal)" : ""}`}
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{t.trx_id || <span className="text-[var(--muted)]">—</span>}</td>
                     <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${amountClass(t.type)}`}>
                       {t.type === "sale" ? "-" : t.type === "contra" ? "-" : "+"}
                       {formatMoney(t.amount)}
@@ -379,7 +382,7 @@ export default function EmployeeLedgerTab() {
                     <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${t.counted ? balanceClass(t.balance_after ?? 0) : "text-[var(--muted)]"}`}>
                       {t.counted ? formatMoney(t.balance_after ?? 0) : "—"}
                     </td>
-                    <td className="px-3 py-2 text-xs text-[var(--muted)]">{t.note || "—"}</td>
+                    <td className="px-3 py-2 text-xs text-[var(--muted)]">{t.note && t.note !== t.trx_id ? t.note : "—"}</td>
                   </tr>
                 ))}
               </tbody>
