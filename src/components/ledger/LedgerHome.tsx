@@ -25,6 +25,7 @@ type Transaction = {
   created_at: string;
   amount: number;
   description: string;
+  trx_id?: string | null;
   note: string | null;
 };
 
@@ -365,6 +366,7 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
                 <div>
                   <p className="font-medium">{t.description}</p>
                   <p className="text-xs text-[var(--muted)]">{formatDate(t.created_at)}</p>
+                  {t.trx_id && <p className="font-mono text-xs text-[var(--muted)]">Trx ID: {t.trx_id}</p>}
                 </div>
                 <span className={`font-medium ${amountClass(t.type)}`}>
                   {t.type === "collection" ? "+" : "−"}

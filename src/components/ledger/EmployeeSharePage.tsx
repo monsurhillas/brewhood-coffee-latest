@@ -28,6 +28,7 @@ type LedgerTransaction = {
   unit_price: number | null;
   amount: number;
   method: string | null;
+  trx_id: string | null;
   note: string | null;
   counted: boolean;
   balance_after: number | null;
@@ -236,6 +237,9 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
                             : `${(t.method ?? "").toUpperCase()}${t.type === "contra" ? " (reversal)" : ""}`}
                         </p>
                         <p className="text-xs text-[var(--muted)]">{formatDate(t.date)}</p>
+                        {t.trx_id && (
+                          <p className="truncate font-mono text-xs text-[var(--muted)]">Trx ID: {t.trx_id}</p>
+                        )}
                       </div>
                       <span className={`shrink-0 font-medium ${amountClass(t.type)}`}>
                         {t.type === "collection" ? "+" : "−"}
