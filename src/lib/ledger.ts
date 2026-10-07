@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { ensureCollectionTrxColumn } from "@/lib/collectionTrx";
 import { computeDrinkBreakdown, type DrinkSlice } from "@/lib/coffeeStats";
 
 // Shared by the manager-facing Employee Ledger tab
@@ -45,6 +46,8 @@ export type LedgerTransaction = {
   unit_price: number | null;
   amount: number;
   method: string | null;
+  // Optional bKash / bank transaction ID (collections only).
+  trx_id: string | null;
   note: string | null;
   counted: boolean;
   balance_after: number | null;
@@ -75,6 +78,7 @@ export type EmployeeLedger = {
 };
 
 export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLedger | null> {
+  await ensureCollectionTrxColumn();
   const db = sql();
 
   const employeeRows = await db`
@@ -109,6 +113,7 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
         sa.unit_price::float8 AS unit_price,
         sa.total::float8 AS amount,
         NULL::text AS method,
+        NULL::text AS trx_id,
         false AS is_contra,
         sa.note
       FROM sales sa WHERE sa.employee_id = ${employeeId}
@@ -123,6 +128,7 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
         NULL::float8 AS unit_price,
         c.amount::float8 AS amount,
         c.method,
+        c.trx_id,
         c.is_contra,
         c.note
       FROM collections c WHERE c.employee_id = ${employeeId}
@@ -140,6 +146,7 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
     unit_price: number | null;
     amount: number;
     method: string | null;
+    trx_id: string | null;
     is_contra: boolean;
     note: string | null;
   };
@@ -162,6 +169,7 @@ export async function getEmployeeLedger(employeeId: number): Promise<EmployeeLed
       unit_price: r.unit_price,
       amount: r.amount,
       method: r.method,
+      trx_id: r.trx_id,
       note: r.note,
       counted,
       balance_after: counted ? Math.round(running * 100) / 100 : null,

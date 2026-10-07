@@ -65,6 +65,7 @@ export const SCHEMA_STATEMENTS = [
     uploaded_at TIMESTAMPTZ DEFAULT now()
   )`,
   `ALTER TABLE collections ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMPTZ DEFAULT now()`,
+  `ALTER TABLE collections ADD COLUMN IF NOT EXISTS trx_id TEXT`,
   `CREATE TABLE IF NOT EXISTS manager_costs (
     id SERIAL PRIMARY KEY,
     category TEXT NOT NULL,
