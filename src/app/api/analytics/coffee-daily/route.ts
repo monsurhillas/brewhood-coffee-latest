@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { ensureTempSalesTable } from "@/lib/tempSales";
 import { normalizeDrinkName, isCoffeeDrink } from "@/lib/coffeeStats";
 import { currentMonthInDhaka, isValidMonthString, daysInMonth } from "@/lib/salaryMonth";
 
@@ -19,10 +20,15 @@ export async function GET(request: NextRequest) {
   const monthParam = request.nextUrl.searchParams.get("month");
   const month = isValidMonthString(monthParam) ? monthParam : currentMonthInDhaka();
 
+  await ensureTempSalesTable();
   const db = sql();
   const rows = await db`
     SELECT created_at::date::text AS day, sku_name, SUM(quantity)::int AS qty, SUM(total)::float8 AS amount
-    FROM sales
+    FROM (
+      SELECT created_at, sku_name, quantity, total FROM sales
+      UNION ALL
+      SELECT created_at, sku_name, quantity, amount AS total FROM temp_entries WHERE kind = 'sale'
+    ) s
     WHERE to_char(created_at, 'YYYY-MM') = ${month}
     GROUP BY day, sku_name
     ORDER BY day ASC
