@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { ensureSalaryReady } from "@/lib/salaryEntries";
+import { ensureTempSalesTable, getTempDueTotal } from "@/lib/tempSales";
 import { monthLabel } from "@/lib/salaryMonth";
 
 export const dynamic = "force-dynamic";
@@ -11,12 +12,15 @@ export async function GET() {
   if (response) return response;
 
   await ensureSalaryReady();
+  await ensureTempSalesTable();
   const db = sql();
 
   const [totals] = await db`
     SELECT
-      (SELECT COALESCE(SUM(total), 0) FROM sales)::float8 AS total_sales,
-      (SELECT COALESCE(SUM(CASE WHEN is_contra THEN -amount ELSE amount END), 0) FROM collections)::float8 AS total_collected,
+      (SELECT COALESCE(SUM(total), 0) FROM sales)::float8
+        + (SELECT COALESCE(SUM(amount), 0) FROM temp_entries WHERE kind = 'sale')::float8 AS total_sales,
+      (SELECT COALESCE(SUM(CASE WHEN is_contra THEN -amount ELSE amount END), 0) FROM collections)::float8
+        + (SELECT COALESCE(SUM(amount), 0) FROM temp_entries WHERE kind = 'payment')::float8 AS total_collected,
       (SELECT COALESCE(SUM(amount), 0) FROM manager_costs)::float8 AS total_costs,
       (SELECT COUNT(*) FROM employees)::int AS employee_count,
       (SELECT COUNT(*) FROM employees WHERE active)::int AS active_employee_count,
@@ -86,7 +90,11 @@ export async function GET() {
 
   const topProducts = await db`
     SELECT sku_name, SUM(quantity)::int AS units_sold, SUM(total)::float8 AS revenue
-    FROM sales
+    FROM (
+      SELECT sku_name, quantity, total FROM sales
+      UNION ALL
+      SELECT sku_name, quantity, amount AS total FROM temp_entries WHERE kind = 'sale'
+    ) s
     GROUP BY sku_name
     ORDER BY revenue DESC
     LIMIT 10
@@ -100,6 +108,10 @@ export async function GET() {
       SELECT date_trunc('day', created_at) AS day,
              CASE WHEN is_contra THEN -amount ELSE amount END AS amt, 'collections' AS kind
       FROM collections
+      UNION ALL
+      SELECT date_trunc('day', created_at) AS day, amount AS amt, 'sales' AS kind FROM temp_entries WHERE kind = 'sale'
+      UNION ALL
+      SELECT date_trunc('day', created_at) AS day, amount AS amt, 'collections' AS kind FROM temp_entries WHERE kind = 'payment'
       UNION ALL
       SELECT date_trunc('day', created_at) AS day, amount AS amt, 'costs' AS kind FROM manager_costs
     )
@@ -120,7 +132,11 @@ export async function GET() {
       EXTRACT(DOW FROM created_at)::int AS weekday,
       SUM(total)::float8 AS sales,
       COUNT(*)::int AS tx_count
-    FROM sales
+    FROM (
+      SELECT created_at, total FROM sales
+      UNION ALL
+      SELECT created_at, amount AS total FROM temp_entries WHERE kind = 'sale'
+    ) s
     GROUP BY weekday
     ORDER BY weekday
   `;
@@ -131,7 +147,11 @@ export async function GET() {
       EXTRACT(HOUR FROM created_at)::int AS hour,
       SUM(total)::float8 AS sales,
       COUNT(*)::int AS tx_count
-    FROM sales
+    FROM (
+      SELECT created_at, total FROM sales
+      UNION ALL
+      SELECT created_at, amount AS total FROM temp_entries WHERE kind = 'sale'
+    ) s
     GROUP BY hour
     ORDER BY hour
   `;
@@ -158,11 +178,15 @@ export async function GET() {
     LIMIT 25
   `;
 
+  const tempDue = await getTempDueTotal();
+
   return NextResponse.json({
     totals: {
       ...totals,
       net: totals.total_sales - totals.total_costs,
-      outstanding: totals.outstanding_net,
+      // Open dues for people without a profile (Temp Sales tab) are outstanding too.
+      outstanding: Math.round((totals.outstanding_net + tempDue) * 100) / 100,
+      tempDue,
       advance: totals.advance_net,
     },
     costBreakdown,
