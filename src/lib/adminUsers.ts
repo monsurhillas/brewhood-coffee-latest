@@ -13,6 +13,7 @@ export const SUPER_ADMIN_EMAIL = "hillas@shopup.org";
 export const TAB_KEYS = [
   "sale",
   "collection",
+  "temp_sales",
   "cost",
   "bulk",
   "invoices",
