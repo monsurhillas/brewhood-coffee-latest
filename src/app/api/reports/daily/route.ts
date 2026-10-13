@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
+import { ensureTempSalesTable } from "@/lib/tempSales";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
   if (response) return response;
 
   const date = request.nextUrl.searchParams.get("date");
+  await ensureTempSalesTable();
   const db = sql();
 
   if (date) {
@@ -20,6 +22,14 @@ export async function GET(request: NextRequest) {
                e.name AS employee_name
         FROM sales sa JOIN employees e ON e.id = sa.employee_id
         WHERE sa.created_at::date = ${date}::date
+        UNION ALL
+        SELECT CASE WHEN t.kind = 'sale' THEN 'sale' ELSE 'collection' END AS type,
+               t.id, t.created_at, t.amount::float8 AS amount,
+               CASE WHEN t.kind = 'sale' THEN t.sku_name || ' × ' || t.quantity
+                    ELSE UPPER(t.method) END AS description,
+               t.note, t.customer_name || ' (temp)' AS employee_name
+        FROM temp_entries t
+        WHERE t.kind <> 'adjustment' AND t.created_at::date = ${date}::date
         UNION ALL
         SELECT CASE WHEN c.is_contra THEN 'contra' ELSE 'collection' END AS type,
                c.id, c.created_at, c.amount::float8 AS amount, UPPER(c.method) AS description, c.note,
@@ -50,6 +60,10 @@ export async function GET(request: NextRequest) {
       UNION ALL
       SELECT created_at::date AS day, 0, CASE WHEN is_contra THEN -amount ELSE amount END, 0, 1
       FROM collections
+      UNION ALL
+      SELECT created_at::date AS day, CASE WHEN kind = 'sale' THEN amount ELSE 0 END,
+             CASE WHEN kind = 'payment' THEN amount ELSE 0 END, 0, 1
+      FROM temp_entries WHERE kind <> 'adjustment'
       UNION ALL
       SELECT created_at::date AS day, 0, 0, amount, 1
       FROM manager_costs
