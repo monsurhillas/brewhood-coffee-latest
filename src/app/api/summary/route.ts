@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireSession } from "@/lib/session";
+import { getTempDueTotal } from "@/lib/tempSales";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,12 @@ export async function GET() {
     ) x
   `;
 
+  // Dues for people without a profile (Temp Sales tab) count as outstanding too.
+  const tempDue = await getTempDueTotal();
+
   return NextResponse.json({
-    outstanding: row.outstanding,
+    outstanding: Math.round((row.outstanding + tempDue) * 100) / 100,
+    tempDue,
     advance: row.advance,
     employeeCount: row.employee_count,
     activeEmployeeCount: row.active_employee_count,
