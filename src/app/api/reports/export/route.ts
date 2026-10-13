@@ -3,10 +3,11 @@ import { sql, ensureCostColumns } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { toCsv } from "@/lib/csv";
 import { ensureCollectionTrxColumn } from "@/lib/collectionTrx";
+import { ensureTempSalesTable } from "@/lib/tempSales";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = ["sales", "collections", "costs", "sales_collections", "employees"] as const;
+const TYPES = ["sales", "collections", "costs", "sales_collections", "employees", "temp_sales"] as const;
 type ReportType = (typeof TYPES)[number];
 
 export async function GET(request: NextRequest) {
@@ -91,6 +92,38 @@ export async function GET(request: NextRequest) {
         r.category as string,
         r.amount as number,
         (r.payment_method as string) ?? "",
+        (r.note as string) ?? "",
+      ])
+    );
+  } else if (type === "temp_sales") {
+    // Every Temp Sales entry (sales, payments and adjustments) for people
+    // without a profile, with the running due per customer after each row.
+    await ensureTempSalesTable();
+    const rows = await db`
+      SELECT t.created_at, t.customer_name, t.kind, t.sku_name, t.quantity, t.unit_price::float8 AS unit_price,
+             t.amount::float8 AS amount, t.method, t.trx_id, t.note,
+             SUM(CASE WHEN t.kind = 'sale' THEN t.amount ELSE -t.amount END)
+               OVER (PARTITION BY t.customer_key ORDER BY t.created_at, t.id)::float8 AS due_after
+      FROM temp_entries t
+      ORDER BY t.created_at DESC, t.id DESC
+    `;
+    const inRange = rows.filter((r) => {
+      const ts = new Date(r.created_at as string).toISOString();
+      return (!fromTs || ts >= new Date(fromTs).toISOString()) && (!toTs || ts <= new Date(toTs).toISOString());
+    });
+    csv = toCsv(
+      ["Date", "Customer", "Type", "Item", "Qty", "Unit Price", "Amount", "Method", "Trx ID", "Due After", "Note"],
+      inRange.map((r) => [
+        new Date(r.created_at as string).toISOString(),
+        r.customer_name as string,
+        r.kind === "sale" ? "Sale" : r.kind === "payment" ? "Payment" : "Adjustment",
+        (r.sku_name as string) ?? "",
+        (r.quantity as number) ?? "",
+        (r.unit_price as number) ?? "",
+        r.amount as number,
+        (r.method as string) ?? "",
+        (r.trx_id as string) ?? "",
+        Math.round((r.due_after as number) * 100) / 100,
         (r.note as string) ?? "",
       ])
     );
