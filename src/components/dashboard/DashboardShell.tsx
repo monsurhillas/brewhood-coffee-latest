@@ -14,6 +14,7 @@ import SkusTab from "@/components/dashboard/tabs/SkusTab";
 import BulkUploadTab from "@/components/dashboard/tabs/BulkUploadTab";
 import InvoiceTab from "@/components/dashboard/tabs/InvoiceTab";
 import EmployeeLedgerTab from "@/components/dashboard/tabs/EmployeeLedgerTab";
+import TempSalesTab from "@/components/dashboard/tabs/TempSalesTab";
 import SalaryTab from "@/components/dashboard/tabs/SalaryTab";
 import AdminTab from "@/components/dashboard/tabs/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -22,6 +23,7 @@ import { formatMoney } from "@/lib/format";
 const TABS = [
   { key: "sale", label: "Sale Entry", short: "Sale" },
   { key: "collection", label: "Collection Entry", short: "Collection" },
+  { key: "temp_sales", label: "Temp Sales", short: "Temp Sales" },
   { key: "cost", label: "Manager Cost", short: "Cost" },
   { key: "bulk", label: "Bulk Upload", short: "Bulk Upload" },
   { key: "invoices", label: "Invoices", short: "Invoices" },
@@ -41,6 +43,7 @@ type TabKey = (typeof TABS)[number]["key"];
 
 type Summary = {
   outstanding: number;
+  tempDue?: number;
   advance: number;
   employeeCount: number;
   activeEmployeeCount: number;
@@ -258,6 +261,7 @@ export default function DashboardShell({
           <StatCard
             label="Total Outstanding"
             value={summary ? formatMoney(summary.outstanding) : null}
+            sub={summary && summary.tempDue && summary.tempDue > 0 ? `incl. ${formatMoney(summary.tempDue)} temporary` : undefined}
             tone="danger"
             icon={<DueIcon />}
           />
@@ -279,6 +283,7 @@ export default function DashboardShell({
             <div key={tab} className="animate-fade-in rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm md:p-6">
               {tab === "sale" && <SaleEntryTab onSaved={bumpRefresh} />}
               {tab === "collection" && <CollectionEntryTab onSaved={bumpRefresh} />}
+              {tab === "temp_sales" && <TempSalesTab onSaved={bumpRefresh} />}
               {tab === "cost" && <ManagerCostTab onSaved={bumpRefresh} />}
               {tab === "bulk" && <BulkUploadTab onSaved={bumpRefresh} />}
               {tab === "invoices" && <InvoiceTab />}
@@ -304,11 +309,13 @@ export default function DashboardShell({
 function StatCard({
   label,
   value,
+  sub,
   tone,
   icon,
 }: {
   label: string;
   value: string | null;
+  sub?: string;
   tone: "danger" | "success";
   icon: React.ReactNode;
 }) {
@@ -328,6 +335,7 @@ function StatCard({
             {value}
           </p>
         )}
+        {sub && <p className="truncate text-[11px] text-[var(--muted)]">{sub}</p>}
       </div>
     </div>
   );
@@ -339,6 +347,7 @@ function DownloadReportsPanel() {
     { key: "collections", label: "Collections Report", desc: "Every collection and contra entry.", dateScoped: true },
     { key: "sales_collections", label: "Combined Sales + Collections", desc: "Sales and collections merged into one chronological log — handy for reconciling a day in a single file.", dateScoped: true },
     { key: "costs", label: "Manager Costs Report", desc: "All manager-logged cost entries.", dateScoped: true },
+    { key: "temp_sales", label: "Temp Sales Report", desc: "Sales, payments and adjustments for temporary customers (no profile), with the due after each entry.", dateScoped: true },
     { key: "employees", label: "Employees Report", desc: "Employee directory with running balances.", dateScoped: false },
   ];
   const [from, setFrom] = useState("");
@@ -448,6 +457,13 @@ function TabIcon({ tabKey }: { tabKey: TabKey }) {
           <rect x="3" y="6" width="18" height="13" rx="2" />
           <path d="M3 10h18" />
           <circle cx="16" cy="14.5" r="1.4" />
+        </svg>
+      );
+    case "temp_sales":
+      return (
+        <svg {...p}>
+          <circle cx="12" cy="8" r="3.2" />
+          <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" strokeDasharray="2.2 2.2" />
         </svg>
       );
     case "cost":
