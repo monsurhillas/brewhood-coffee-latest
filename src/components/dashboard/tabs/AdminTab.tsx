@@ -22,6 +22,7 @@ type AdminUser = {
 const TAB_LABELS: Record<string, string> = {
   sale: "Sale Entry",
   collection: "Collection Entry",
+  temp_sales: "Temp Sales",
   cost: "Manager Cost",
   bulk: "Bulk Upload",
   invoices: "Invoices",
