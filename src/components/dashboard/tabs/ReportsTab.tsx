@@ -35,7 +35,7 @@ export default function ReportsTab() {
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-      <h2 className="mb-3 font-medium">Day-wise Reports</h2>
+      <h2 className="mb-3 font-medium">Daily activity</h2>
       {loading ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>
       ) : days.length === 0 ? (
@@ -98,9 +98,9 @@ function DayModal({ day, onClose }: { day: string; onClose: () => void }) {
           </button>
         </div>
         {transactions === null ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">Loading…</p>
+          <p className="bh-empty">Loading…</p>
         ) : transactions.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No transactions on this day.</p>
+          <p className="bh-empty">No transactions on this day.</p>
         ) : (
           <ul className="divide-y divide-[var(--border)]">
             {transactions.map((t) => (

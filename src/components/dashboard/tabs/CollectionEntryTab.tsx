@@ -92,7 +92,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
         onSubmit={handleSubmit}
         className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
       >
-        <h2 className="font-medium">{isContra ? "Contra Entry" : "Collection Entry"}</h2>
+        <h2 className="font-medium">{isContra ? "Contra entry" : "New collection"}</h2>
 
         <EntryDateBar entryDate={entryDate} />
 
@@ -168,7 +168,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
           </p>
         </div>
         {recent.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No collections yet.</p>
+          <p className="bh-empty">No collections yet.</p>
         ) : (
           <>
             <ul className="flex flex-col gap-2 sm:hidden">

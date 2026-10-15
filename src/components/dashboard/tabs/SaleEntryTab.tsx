@@ -104,7 +104,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
         onSubmit={handleSubmit}
         className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
       >
-        <h2 className="font-medium">Sale Entry</h2>
+        <h2 className="font-medium">New sale</h2>
 
         <EntryDateBar entryDate={entryDate} />
 
@@ -183,7 +183,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Recent Sales</h2>
         {recent.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No sales yet.</p>
+          <p className="bh-empty">No sales yet.</p>
         ) : (
           <>
             {/* Below sm, a table this wide has to scroll to be read at all —

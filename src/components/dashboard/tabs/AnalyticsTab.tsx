@@ -77,7 +77,7 @@ export default function AnalyticsTab() {
         data ? (
           <AnalyticsOverview data={data} />
         ) : (
-          <p className="py-12 text-center text-sm text-[var(--muted)]">Loading analytics…</p>
+          <p className="bh-empty bh-empty-lg">Loading analytics…</p>
         )
       ) : (
         <CoffeeDailyView />
@@ -141,13 +141,13 @@ function AnalyticsOverview({ data }: { data: Analytics }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Sales" value={formatMoney(totals.total_sales)} />
-        <StatCard label="Total Collected" value={formatMoney(totals.total_collected)} />
-        <StatCard label="Manager Costs" value={formatMoney(totals.total_costs)} />
+        <StatCard label="Total Sales" tone="brand" value={formatMoney(totals.total_sales)} />
+        <StatCard label="Total Collected" tone="good" value={formatMoney(totals.total_collected)} />
+        <StatCard label="Manager Costs" tone="bad" value={formatMoney(totals.total_costs)} />
         <StatCard label="Net" value={formatMoney(totals.net)} highlight />
-        <StatCard label="Outstanding" value={formatMoney(totals.outstanding)} />
-        <StatCard label="Advance Balance" value={formatMoney(totals.advance)} />
-        <StatCard label="Employees" value={`${totals.active_employee_count}/${totals.employee_count} active`} />
+        <StatCard label="Outstanding" tone="bad" value={formatMoney(totals.outstanding)} />
+        <StatCard label="Advance Balance" tone="good" value={formatMoney(totals.advance)} />
+        <StatCard label="Employees" tone="info" value={`${totals.active_employee_count}/${totals.employee_count} active`} />
         <StatCard label="Sale Entries" value={String(totals.sale_count)} />
       </div>
 
@@ -327,15 +327,42 @@ function AnalyticsOverview({ data }: { data: Analytics }) {
   );
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+type Tone = "brand" | "good" | "bad" | "info" | "neutral";
+
+const TONE_DOT: Record<Tone, string> = {
+  brand: "bg-[var(--brand)]",
+  good: "bg-emerald-500",
+  bad: "bg-rose-500",
+  info: "bg-sky-500",
+  neutral: "bg-amber-400",
+};
+
+function StatCard({
+  label,
+  value,
+  highlight,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  tone?: Tone;
+}) {
   return (
     <div
-      className={`rounded-xl border p-4 ${
-        highlight ? "border-[var(--brand)] bg-[var(--brand)]/10" : "border-[var(--border)] bg-[var(--card)]"
+      className={`relative overflow-hidden rounded-2xl border p-4 transition-shadow hover:shadow-md ${
+        highlight
+          ? "border-transparent bg-[image:var(--brand-grad)] text-white shadow-md"
+          : "border-[var(--border)] bg-[var(--card)]"
       }`}
     >
-      <p className="text-xs text-[var(--muted)]">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${highlight ? "bg-white/80" : TONE_DOT[tone]}`} />
+        <p className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${highlight ? "text-white/80" : "text-[var(--muted)]"}`}>
+          {label}
+        </p>
+      </div>
+      <p className="mt-2 truncate text-xl font-semibold tracking-tight">{value}</p>
     </div>
   );
 }
@@ -361,7 +388,7 @@ function ChartCard({
 }
 
 function EmptyChart({ text }: { text: string }) {
-  return <p className="py-12 text-center text-sm text-[var(--muted)]">{text}</p>;
+  return <p className="bh-empty bh-empty-lg">{text}</p>;
 }
 
 type TooltipPayloadEntry = {
@@ -431,9 +458,9 @@ function CoffeeDailyView() {
       </div>
 
       {!data ? (
-        <p className="py-12 text-center text-sm text-[var(--muted)]">Loading…</p>
+        <p className="bh-empty bh-empty-lg">Loading…</p>
       ) : data.drinkNames.length === 0 ? (
-        <p className="py-12 text-center text-sm text-[var(--muted)]">No coffee sales this month.</p>
+        <p className="bh-empty bh-empty-lg">No coffee sales this month.</p>
       ) : (
         <div className="scroll-fade-x overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">

@@ -340,7 +340,7 @@ export default function InvoiceTab() {
               ))}
             </tbody>
           </table>
-          {recent.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No invoices generated yet.</p>}
+          {recent.length === 0 && <p className="bh-empty">No invoices generated yet.</p>}
         </div>
       </div>
     </div>

@@ -547,7 +547,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                 ))}
               </tbody>
             </table>
-            {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet — add your first one.</p>}
+            {staff?.length === 0 && <p className="bh-empty">No staff yet — add your first one.</p>}
           </div>
         </div>
       </div>
@@ -617,7 +617,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
               ))}
             </tbody>
           </table>
-          {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet.</p>}
+          {staff?.length === 0 && <p className="bh-empty">No staff yet.</p>}
         </div>
       </div>
 
@@ -921,7 +921,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
               ))}
             </tbody>
           </table>
-          {staff?.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No staff yet.</p>}
+          {staff?.length === 0 && <p className="bh-empty">No staff yet.</p>}
         </div>
       </div>
 
@@ -932,7 +932,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
         </p>
         {historyError && <p className="mb-3 text-sm text-red-500">{historyError}</p>}
         {history?.length === 0 && (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No salary payments yet.</p>
+          <p className="bh-empty">No salary payments yet.</p>
         )}
         <div className="flex flex-col gap-3">
           {history?.map((m, idx) => {

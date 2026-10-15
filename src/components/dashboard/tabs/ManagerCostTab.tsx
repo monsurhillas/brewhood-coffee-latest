@@ -89,7 +89,7 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
         onSubmit={handleSubmit}
         className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
       >
-        <h2 className="font-medium">Manager Cost</h2>
+        <h2 className="font-medium">Log a cost</h2>
 
         <EntryDateBar entryDate={entryDate} />
 
@@ -142,7 +142,7 @@ export default function ManagerCostTab({ onSaved }: { onSaved: () => void }) {
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-3 font-medium">Recent Costs</h2>
         {recent.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No costs logged yet.</p>
+          <p className="bh-empty">No costs logged yet.</p>
         ) : (
           <>
             <ul className="flex flex-col gap-2 sm:hidden">

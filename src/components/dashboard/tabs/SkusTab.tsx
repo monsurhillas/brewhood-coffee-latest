@@ -240,7 +240,7 @@ export default function SkusTab() {
               ))}
             </tbody>
           </table>
-          {skus.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No items yet.</p>}
+          {skus.length === 0 && <p className="bh-empty">No items yet.</p>}
         </div>
       </div>
 

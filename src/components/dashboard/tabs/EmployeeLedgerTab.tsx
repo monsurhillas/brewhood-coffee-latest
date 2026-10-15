@@ -163,7 +163,7 @@ export default function EmployeeLedgerTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-        <h2 className="mb-3 font-medium">Employee Ledger</h2>
+        <h2 className="mb-3 font-medium">Find an employee</h2>
         <p className="mb-3 text-xs text-[var(--muted)]">
           Search an employee by name or ID to see their complete transaction history — every sale,
           collection, and contra entry ever recorded for them, oldest mistakes and all, with the

@@ -487,9 +487,9 @@ export default function TempSalesTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           {customers === null ? (
-            <p className="py-6 text-center text-sm text-[var(--muted)]">Loading…</p>
+            <p className="bh-empty">Loading…</p>
           ) : visible.length === 0 ? (
-            <p className="py-6 text-center text-sm text-[var(--muted)]">
+            <p className="bh-empty">
               {all.length === 0
                 ? "No temporary sales yet. Book one with the form — the due appears here and in Total Outstanding."
                 : filter === "open"
