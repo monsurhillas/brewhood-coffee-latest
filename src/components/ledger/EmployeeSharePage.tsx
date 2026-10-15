@@ -115,7 +115,7 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
         )}
 
         {!data && !error && (
-          <p className="py-12 text-center text-sm text-[var(--muted)]">Loading your ledger…</p>
+          <p className="bh-empty bh-empty-lg">Loading your ledger…</p>
         )}
 
         {data && (
@@ -224,7 +224,7 @@ export default function EmployeeSharePage({ employeeId }: { employeeId: string }
             </h3>
 
             {recentTransactions.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">No transactions yet.</p>
+              <p className="bh-empty">No transactions yet.</p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
                 <ul className="divide-y divide-[var(--border)]">

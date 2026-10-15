@@ -52,13 +52,13 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 shadow-sm">
+    <div className="w-full max-w-sm rounded-3xl border border-[var(--border)] bg-[var(--card)] p-8 shadow-[var(--shadow-lg)]">
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand)] text-xl text-white">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[image:var(--brand-grad)] text-2xl text-white shadow-lg">
           ☕
         </div>
-        <h1 className="text-lg font-semibold">Manager Login</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Sign in to BrewHood Coffee dashboard</p>
+        <h1 className="text-xl font-semibold tracking-tight">Welcome back</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">Sign in to manage BrewHood Coffee</p>
       </div>
 
       {oauthError && (
@@ -71,7 +71,7 @@ export default function LoginForm() {
         type="button"
         onClick={handleGoogleSignIn}
         disabled={googleLoading}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-transparent px-4 py-2.5 text-sm font-medium transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm font-medium shadow-sm transition hover:-translate-y-px hover:border-[var(--brand)] hover:shadow-md disabled:opacity-60"
       >
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
           <path

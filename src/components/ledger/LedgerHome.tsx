@@ -123,7 +123,7 @@ export default function LedgerHome() {
         </div>
 
         <div className="relative mx-auto max-w-5xl px-6 pb-8 pt-6 text-center sm:pt-10">
-          <p className="text-4xl sm:text-5xl">☕</p>
+          <p className="text-4xl drop-shadow-lg sm:text-5xl">☕</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             Great coffee, honest tabs.
           </h2>
@@ -169,9 +169,9 @@ export default function LedgerHome() {
             {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
             {loading ? (
-              <p className="py-12 text-center text-sm text-[var(--muted)]">Loading ledger…</p>
+              <p className="bh-empty bh-empty-lg">Loading ledger…</p>
             ) : employees.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[var(--muted)]">No employees match this view yet.</p>
+              <p className="bh-empty bh-empty-lg">No employees match this view yet.</p>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {employees.map((e) => (
@@ -181,9 +181,20 @@ export default function LedgerHome() {
                     className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left transition hover:border-[var(--brand)]"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{e.name}</p>
-                        {e.role && <p className="text-xs text-[var(--muted)]">{e.role}</p>}
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[image:var(--brand-grad)] text-xs font-semibold text-white shadow-sm">
+                          {e.name
+                            .split(/\s+/)
+                            .map((w) => w[0])
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{e.name}</p>
+                          {e.role && <p className="truncate text-xs text-[var(--muted)]">{e.role}</p>}
+                        </div>
                       </div>
                       {!e.active && (
                         <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
@@ -260,11 +271,11 @@ function ActivityFeed() {
   if (error) return <p className="py-12 text-center text-sm text-red-600">{error}</p>;
 
   if (items === null) {
-    return <p className="py-12 text-center text-sm text-[var(--muted)]">Loading recent activity…</p>;
+    return <p className="bh-empty bh-empty-lg">Loading recent activity…</p>;
   }
 
   if (items.length === 0) {
-    return <p className="py-12 text-center text-sm text-[var(--muted)]">No activity yet — check back soon.</p>;
+    return <p className="bh-empty bh-empty-lg">No activity yet — check back soon.</p>;
   }
 
   return (
@@ -356,9 +367,9 @@ function TransactionModal({ employee, onClose }: { employee: Employee; onClose: 
         </h3>
 
         {transactions === null ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">Loading…</p>
+          <p className="bh-empty">Loading…</p>
         ) : transactions.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No transactions yet.</p>
+          <p className="bh-empty">No transactions yet.</p>
         ) : (
           <ul className="divide-y divide-[var(--border)]">
             {transactions.map((t) => (
