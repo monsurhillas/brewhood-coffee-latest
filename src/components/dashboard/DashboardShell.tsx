@@ -21,23 +21,25 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { formatMoney } from "@/lib/format";
 
 const TABS = [
-  { key: "sale", label: "Sale Entry", short: "Sale" },
-  { key: "collection", label: "Collection Entry", short: "Collection" },
-  { key: "temp_sales", label: "Temp Sales", short: "Temp Sales" },
-  { key: "cost", label: "Manager Cost", short: "Cost" },
-  { key: "bulk", label: "Bulk Upload", short: "Bulk Upload" },
-  { key: "invoices", label: "Invoices", short: "Invoices" },
-  { key: "ledger", label: "Employee Ledger", short: "Ledger" },
-  { key: "analytics", label: "Analytics", short: "Analytics" },
-  { key: "reports", label: "Day-wise Reports", short: "Reports" },
-  { key: "download", label: "Download Reports", short: "Downloads" },
-  { key: "skus", label: "SKUs", short: "SKUs" },
-  { key: "salary", label: "Salary", short: "Salary" },
+  { key: "sale", label: "Sale Entry", short: "Sale", group: "Daily entry", desc: "Book a sale against an employee's account." },
+  { key: "collection", label: "Collection Entry", short: "Collection", group: "Daily entry", desc: "Record cash, bKash or bank payments received." },
+  { key: "temp_sales", label: "Temp Sales", short: "Temp Sales", group: "Daily entry", desc: "Sell to people without a profile and collect their dues later." },
+  { key: "cost", label: "Manager Cost", short: "Cost", group: "Daily entry", desc: "Log the day's running costs and expenses." },
+  { key: "bulk", label: "Bulk Upload", short: "Bulk Upload", group: "Daily entry", desc: "Import many sales or collections from a spreadsheet at once." },
+  { key: "invoices", label: "Invoices", short: "Invoices", group: "Records", desc: "Generate and share invoices for your customers." },
+  { key: "ledger", label: "Employee Ledger", short: "Ledger", group: "Records", desc: "Every sale and collection, employee by employee." },
+  { key: "skus", label: "SKUs", short: "SKUs", group: "Records", desc: "Manage your menu items and prices." },
+  { key: "salary", label: "Salary", short: "Salary", group: "Records", desc: "Run payroll and track settlements." },
+  { key: "analytics", label: "Analytics", short: "Analytics", group: "Insights", desc: "Revenue, products and trends at a glance." },
+  { key: "reports", label: "Day-wise Reports", short: "Reports", group: "Insights", desc: "A day-by-day view of everything that happened." },
+  { key: "download", label: "Download Reports", short: "Downloads", group: "Insights", desc: "Export clean CSV files for any period." },
   // Not in adminUsers.TAB_KEYS on purpose — it's never one of the tabs a
   // super admin can hand out. Only isSuperAdmin below decides whether this
   // shows up at all.
-  { key: "admin", label: "Admin", short: "Admin" },
+  { key: "admin", label: "Admin", short: "Admin", group: "Settings", desc: "Control who on your team can see and do what." },
 ] as const;
+
+const GROUP_ORDER = ["Daily entry", "Records", "Insights", "Settings"] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -146,12 +148,12 @@ export default function DashboardShell({
         }`}
       >
         <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)] text-lg text-white shadow-sm">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[image:var(--brand-grad)] text-lg text-white shadow-md">
             ☕
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight">BrewHood Coffee</p>
-            <p className="text-xs text-[var(--muted)]">Manager Dashboard</p>
+            <p className="truncate text-[15px] font-semibold leading-tight tracking-tight">BrewHood Coffee</p>
+            <p className="bh-eyebrow mt-0.5">Manager Dashboard</p>
           </div>
           <button
             type="button"
@@ -163,33 +165,42 @@ export default function DashboardShell({
           </button>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-          {visibleTabs.map((t) => {
-            const active = tab === t.key;
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {GROUP_ORDER.map((group) => {
+            const items = visibleTabs.filter((t) => t.group === group);
+            if (items.length === 0) return null;
             return (
-              <button
-                key={t.key}
-                onClick={() => selectTab(t.key)}
-                className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-[var(--brand)]/12 text-[var(--brand-dark)] dark:text-[var(--brand)]"
-                    : "text-[var(--foreground)]/80 hover:bg-black/5 dark:hover:bg-white/5"
-                }`}
-              >
-                {active && (
-                  <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--brand)]" />
-                )}
-                <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                    active
-                      ? "bg-[var(--brand)] text-white"
-                      : "bg-black/5 text-[var(--muted)] group-hover:text-[var(--foreground)] dark:bg-white/5"
-                  }`}
-                >
-                  <TabIcon tabKey={t.key} />
-                </span>
-                <span className="truncate">{t.label}</span>
-              </button>
+              <div key={group} className="mb-4 last:mb-0">
+                <p className="bh-eyebrow mb-1.5 px-3">{group}</p>
+                <div className="space-y-0.5">
+                  {items.map((t) => {
+                    const active = tab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        onClick={() => selectTab(t.key)}
+                        aria-current={active ? "page" : undefined}
+                        className={`group relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-all ${
+                          active
+                            ? "bg-[var(--brand-soft)] text-[var(--brand-dark)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_22%,transparent)]"
+                            : "text-[var(--foreground)]/75 hover:bg-black/[0.04] hover:text-[var(--foreground)] dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
+                            active
+                              ? "bg-[image:var(--brand-grad)] text-white shadow-md"
+                              : "bg-black/[0.04] text-[var(--muted)] group-hover:text-[var(--brand)] dark:bg-white/5"
+                          }`}
+                        >
+                          <TabIcon tabKey={t.key} />
+                        </span>
+                        <span className="truncate">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
@@ -203,7 +214,7 @@ export default function DashboardShell({
             View Public Ledger
           </Link>
           <div className="flex items-center gap-3 rounded-xl bg-black/5 px-3 py-2.5 dark:bg-white/5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-semibold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[image:var(--brand-grad)] text-xs font-semibold text-white shadow-sm">
               {initials}
             </div>
             <div className="min-w-0 flex-1">
@@ -224,7 +235,7 @@ export default function DashboardShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:ml-72">
-        <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--card)]/90 px-4 py-3 backdrop-blur md:px-8">
+        <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--card)]/80 px-4 py-3 backdrop-blur-xl md:px-8">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -233,7 +244,11 @@ export default function DashboardShell({
           >
             <MenuIcon />
           </button>
-          <h1 className="mr-auto text-base font-semibold md:text-lg">{activeTabMeta?.label ?? "Dashboard"}</h1>
+          <div className="mr-auto flex min-w-0 items-center gap-2 text-sm">
+            <span className="hidden text-[var(--muted)] sm:inline">{activeTabMeta?.group ?? "Dashboard"}</span>
+            <span className="hidden text-[var(--muted)]/60 sm:inline">/</span>
+            <h1 className="truncate text-base font-semibold md:text-[17px]">{activeTabMeta?.label ?? "Dashboard"}</h1>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {visibleTabs.length > 0 && (
               <button
@@ -257,21 +272,45 @@ export default function DashboardShell({
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-3 px-4 pt-4 sm:max-w-xl sm:grid-cols-2 md:px-8">
-          <StatCard
-            label="Total Outstanding"
-            value={summary ? formatMoney(summary.outstanding) : null}
-            sub={summary && summary.tempDue && summary.tempDue > 0 ? `incl. ${formatMoney(summary.tempDue)} temporary` : undefined}
-            tone="danger"
-            icon={<DueIcon />}
-          />
-          <StatCard
-            label="Total Advance Balance"
-            value={summary ? formatMoney(summary.advance) : null}
-            tone="success"
-            icon={<AdvanceIcon />}
-          />
-        </div>
+        <section className="px-4 pt-5 md:px-8">
+          <div className="bh-hero p-4 md:p-5">
+            <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
+              <div className="min-w-0 lg:w-64 lg:shrink-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200/80">BrewHood Coffee</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">
+                  Welcome back, {managerName.trim().split(/\s+/)[0] || "there"}
+                </h2>
+                <p className="mt-1 text-sm text-amber-50/70">
+                  Where your accounts stand today.
+                </p>
+              </div>
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                <StatCard
+                  label="Total Outstanding"
+                  value={summary ? formatMoney(summary.outstanding) : null}
+                  sub={summary && summary.tempDue && summary.tempDue > 0 ? `incl. ${formatMoney(summary.tempDue)} temporary` : "owed by customers"}
+                  tone="danger"
+                  icon={<DueIcon />}
+                />
+                <StatCard
+                  label="Advance Balance"
+                  value={summary ? formatMoney(summary.advance) : null}
+                  sub="paid in advance"
+                  tone="success"
+                  icon={<AdvanceIcon />}
+                />
+                <StatCard
+                  label="Employees"
+                  value={summary ? String(summary.activeEmployeeCount) : null}
+                  sub={summary ? `active of ${summary.employeeCount} total` : undefined}
+                  tone="neutral"
+                  icon={<PeopleIcon />}
+                  className="col-span-2 sm:col-span-1"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
         <main className="flex-1 px-4 py-6 md:px-8">
           {visibleTabs.length === 0 ? (
@@ -280,7 +319,17 @@ export default function DashboardShell({
               <p className="text-sm text-[var(--muted)]">Ask your admin to grant you a tab to get started.</p>
             </div>
           ) : (
-            <div key={tab} className="animate-fade-in rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm md:p-6">
+            <div key={tab} className="animate-fade-in overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-md)]">
+              <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--brand-soft)] px-4 py-3.5 md:px-6">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[image:var(--brand-grad)] text-white shadow-md">
+                  <TabIcon tabKey={tab} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="bh-page-title !text-[1.05rem] truncate">{activeTabMeta?.label}</h2>
+                  <p className="truncate text-xs text-[var(--muted)]">{activeTabMeta?.desc}</p>
+                </div>
+              </div>
+              <div className="p-4 md:p-6">
               {tab === "sale" && <SaleEntryTab onSaved={bumpRefresh} />}
               {tab === "collection" && <CollectionEntryTab onSaved={bumpRefresh} />}
               {tab === "temp_sales" && <TempSalesTab onSaved={bumpRefresh} />}
@@ -294,6 +343,7 @@ export default function DashboardShell({
               {tab === "skus" && <SkusTab />}
               {tab === "salary" && <SalaryTab onSaved={bumpRefresh} />}
               {tab === "admin" && <AdminTab />}
+              </div>
             </div>
           )}
         </main>
@@ -312,30 +362,32 @@ function StatCard({
   sub,
   tone,
   icon,
+  className = "",
 }: {
   label: string;
   value: string | null;
   sub?: string;
-  tone: "danger" | "success";
+  tone: "danger" | "success" | "neutral";
   icon: React.ReactNode;
+  className?: string;
 }) {
-  const toneClasses =
+  const iconTone =
     tone === "danger"
-      ? "text-red-600 dark:text-red-400 bg-red-500/10"
-      : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10";
+      ? "bg-rose-400/20 text-rose-200"
+      : tone === "success"
+        ? "bg-emerald-400/20 text-emerald-200"
+        : "bg-amber-300/20 text-amber-100";
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneClasses}`}>{icon}</div>
+    <div className={`flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2.5 backdrop-blur-sm sm:px-4 sm:py-3 ${className}`}>
+      <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:flex ${iconTone}`}>{icon}</div>
       <div className="min-w-0">
-        <p className="whitespace-nowrap text-[11px] uppercase tracking-wide text-[var(--muted)]">{label}</p>
+        <p className="whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[0.1em] text-amber-100/70">{label}</p>
         {value === null ? (
-          <div className="mt-1 h-5 w-20 animate-pulse rounded bg-black/10 dark:bg-white/10" />
+          <div className="mt-1.5 h-6 w-24 animate-pulse rounded bg-white/15" />
         ) : (
-          <p className={`truncate text-base font-semibold ${tone === "danger" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-            {value}
-          </p>
+          <p className="truncate text-lg font-semibold leading-tight tracking-tight text-white sm:text-xl">{value}</p>
         )}
-        {sub && <p className="truncate text-[11px] text-[var(--muted)]">{sub}</p>}
+        {sub && <p className="truncate text-[11px] text-amber-50/60">{sub}</p>}
       </div>
     </div>
   );
@@ -400,10 +452,10 @@ function DownloadReportsPanel() {
         {types.map((t) => (
           <div
             key={t.key}
-            className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-5 transition-shadow hover:shadow-md"
+            className="group flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--brand)]/50 hover:shadow-md"
           >
-            <h3 className="font-medium">{t.label}</h3>
-            <p className="mt-1 text-sm text-[var(--muted)]">{t.desc}</p>
+            <h3 className="font-semibold">{t.label}</h3>
+            <p className="mb-4 mt-1 text-sm text-[var(--muted)]">{t.desc}</p>
             {!t.dateScoped && (from || to) && (
               <p className="mt-1 text-xs text-[var(--muted)]">
                 This report is a live snapshot, not a dated log — the date range doesn&apos;t apply here.
@@ -411,7 +463,7 @@ function DownloadReportsPanel() {
             )}
             <a
               href={reportHref(t.key, t.dateScoped)}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              className="mt-auto inline-flex w-fit items-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white"
             >
               <DownloadIcon />
               Download CSV
@@ -561,6 +613,17 @@ function AdvanceIcon() {
     <svg {...p}>
       <path d="M12 21c4.5-3 7-6.5 7-10a7 7 0 1 0-14 0c0 3.5 2.5 7 7 10Z" />
       <circle cx="12" cy="11" r="2.4" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  const p = iconProps();
+  return (
+    <svg {...p}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+      <path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.8c1.8.7 3 2.3 3 5.2" />
     </svg>
   );
 }
