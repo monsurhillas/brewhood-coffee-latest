@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf6f1;
+  --background: #f8f2ea;
   --foreground: #241a12;
   --brand: #6f4518;
   --brand-dark: #4a2d0f;
-  --card: #ffffff;
+  --card: #fffefb;
   --border: #e7dccd;
   --muted: #8a7563;
   /* Tells the browser which palette to use for native form controls (the
@@ -13,6 +13,13 @@
      renders with the OS's default light popup even on a dark page, leaving
      near-invisible pale text. Kept in sync with the theme below. */
   color-scheme: light;
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, transparent);
+  --brand-grad: linear-gradient(135deg, #8a5524 0%, #6f4518 55%, #4a2d0f 100%);
+  --surface: #fffdf9;
+  --shadow-sm: 0 1px 2px rgba(58, 36, 16, 0.05), 0 1px 3px rgba(58, 36, 16, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(58, 36, 16, 0.08), 0 2px 6px -2px rgba(58, 36, 16, 0.05);
+  --shadow-lg: 0 18px 40px -12px rgba(58, 36, 16, 0.22);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 @theme inline {
@@ -28,14 +35,21 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #17120d;
+    --background: #14100c;
     --foreground: #f3ece3;
     --brand: #d79a5e;
     --brand-dark: #f0b579;
-    --card: #221a13;
+    --card: #1e1711;
     --border: #362a1e;
     --muted: #a6947f;
     color-scheme: dark;
+    --brand-soft: color-mix(in srgb, var(--brand) 14%, transparent);
+    --brand-grad: linear-gradient(135deg, #b9763a 0%, #9a5f2b 55%, #7e4d20 100%);
+    --surface: #2a2017;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 20px 44px -12px rgba(0, 0, 0, 0.7);
+    --ring: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent);
   }
 }
 
@@ -44,29 +58,47 @@
    prefers-color-scheme media query above, so a manual choice always wins
    over the system default. */
 :root.light {
-  --background: #faf6f1;
+  --background: #f8f2ea;
   --foreground: #241a12;
   --brand: #6f4518;
   --brand-dark: #4a2d0f;
-  --card: #ffffff;
+  --card: #fffefb;
   --border: #e7dccd;
   --muted: #8a7563;
   color-scheme: light;
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, transparent);
+  --brand-grad: linear-gradient(135deg, #8a5524 0%, #6f4518 55%, #4a2d0f 100%);
+  --surface: #fffdf9;
+  --shadow-sm: 0 1px 2px rgba(58, 36, 16, 0.05), 0 1px 3px rgba(58, 36, 16, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(58, 36, 16, 0.08), 0 2px 6px -2px rgba(58, 36, 16, 0.05);
+  --shadow-lg: 0 18px 40px -12px rgba(58, 36, 16, 0.22);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 
 :root.dark {
-  --background: #17120d;
+  --background: #14100c;
   --foreground: #f3ece3;
   --brand: #d79a5e;
   --brand-dark: #f0b579;
-  --card: #221a13;
+  --card: #1e1711;
   --border: #362a1e;
   --muted: #a6947f;
   color-scheme: dark;
+  --brand-soft: color-mix(in srgb, var(--brand) 14%, transparent);
+  --brand-grad: linear-gradient(135deg, #b9763a 0%, #9a5f2b 55%, #7e4d20 100%);
+  --surface: #2a2017;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 20px 44px -12px rgba(0, 0, 0, 0.7);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(900px 420px at 12% -8%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 70%),
+    radial-gradient(700px 380px at 100% 0%, color-mix(in srgb, var(--brand) 5%, transparent), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
 }
@@ -159,4 +191,350 @@ table tbody tr:hover {
   background-color: var(--card);
   background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
   background-attachment: local, local, scroll, scroll;
+}
+
+
+/* =====================================================================
+   Premium polish layer
+   Plain (unlayered) rules so they win over Tailwind utilities — every tab
+   gets the same refined inputs, buttons, cards and tables without each
+   component restating the styling. Selectors key off the utility classes
+   the components already use, so layout/sizing classes keep working.
+   ===================================================================== */
+
+body {
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.012em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 28%, transparent);
+}
+
+/* Money & counts line up in columns. */
+td, th, [class*="font-semibold"], [class*="font-medium"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Inputs ---- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  border-color: color-mix(in srgb, var(--border) 85%, var(--foreground) 6%);
+  background-color: color-mix(in srgb, var(--card) 70%, var(--background));
+  border-radius: 0.7rem;
+  box-shadow: inset 0 1px 1px rgba(58, 36, 16, 0.03);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):hover,
+select:hover,
+textarea:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--brand);
+  background-color: var(--card);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 75%, transparent);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--brand);
+}
+
+input[readonly],
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.7;
+}
+
+/* ---- Primary buttons: anything filled with the brand colour ---- */
+button[class*="bg-[var(--brand)] "],
+a[class*="bg-[var(--brand)] "] {
+  background-image: var(--brand-grad);
+  background-color: transparent;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 6px 14px -6px color-mix(in srgb, var(--brand) 70%, transparent);
+  border: 1px solid color-mix(in srgb, #000 12%, transparent);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease, opacity 160ms ease;
+}
+
+button[class*="bg-[var(--brand)] "]:hover:not(:disabled),
+a[class*="bg-[var(--brand)] "]:hover {
+  filter: brightness(1.07) saturate(1.05);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 10px 20px -8px color-mix(in srgb, var(--brand) 80%, transparent);
+}
+
+button[class*="bg-[var(--brand)] "]:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---- Secondary / outline buttons ---- */
+button[class*="border-[var(--border)]"][class*="hover:border-[var(--brand)]"],
+a[class*="border-[var(--border)]"][class*="hover:border-[var(--brand)]"] {
+  background-color: color-mix(in srgb, var(--card) 80%, transparent);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 140ms ease, color 140ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+
+button[class*="border-[var(--border)]"][class*="hover:border-[var(--brand)]"]:hover,
+a[class*="border-[var(--border)]"][class*="hover:border-[var(--brand)]"]:hover {
+  box-shadow: var(--shadow-md);
+  background-color: var(--brand-soft);
+}
+
+/* ---- Cards ---- */
+[class*="rounded-xl"][class*="border-[var(--border)]"][class*="bg-[var(--card)]"],
+[class*="rounded-2xl"][class*="border-[var(--border)]"][class*="bg-[var(--card)]"] {
+  border-radius: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+[class*="rounded-xl"][class*="border-[var(--border)]"][class*="bg-[var(--background)]"],
+[class*="rounded-lg"][class*="border-[var(--border)]"][class*="bg-[var(--background)]"] {
+  border-radius: 0.8rem;
+}
+
+/* Clickable cards lift on hover. */
+button[class*="rounded-xl"][class*="bg-[var(--card)]"][class*="hover:border-[var(--brand)]"],
+a[class*="rounded-xl"][class*="bg-[var(--card)]"][class*="hover:border-[var(--brand)]"] {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 140ms ease;
+}
+
+button[class*="rounded-xl"][class*="bg-[var(--card)]"][class*="hover:border-[var(--brand)]"]:hover,
+a[class*="rounded-xl"][class*="bg-[var(--card)]"][class*="hover:border-[var(--brand)]"]:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Modal backdrops: soft blur. */
+[class*="fixed"][class*="inset-0"][class*="bg-black/40"] {
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* ---- Tables ---- */
+table thead tr {
+  background: color-mix(in srgb, var(--brand) 5%, transparent);
+}
+
+table thead th {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+table thead th:first-child {
+  padding-left: 0.5rem;
+  border-top-left-radius: 0.6rem;
+  border-bottom-left-radius: 0.6rem;
+}
+
+table thead th:last-child {
+  padding-right: 0.5rem;
+  border-top-right-radius: 0.6rem;
+  border-bottom-right-radius: 0.6rem;
+}
+
+table thead th {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+table tbody td:first-child {
+  padding-left: 0.5rem;
+}
+
+table tbody td:last-child {
+  padding-right: 0.5rem;
+}
+
+table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+table thead tr {
+  border-bottom-color: transparent !important;
+}
+
+/* ---- Shared building blocks used by the redesigned pages ---- */
+.bh-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bh-page-title {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.bh-panel {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.bh-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.1rem;
+  color: #fff;
+  background:
+    radial-gradient(520px 220px at 90% -20%, rgba(255, 214, 160, 0.28), transparent 70%),
+    radial-gradient(380px 200px at 0% 120%, rgba(255, 190, 120, 0.16), transparent 70%),
+    linear-gradient(135deg, #5a3513 0%, #3f2409 60%, #2b1706 100%);
+  box-shadow: var(--shadow-lg);
+}
+
+.bh-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.7), transparent 70%);
+  -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.7), transparent 70%);
+  pointer-events: none;
+}
+
+.bh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.bh-skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--foreground) 6%, transparent) 25%, color-mix(in srgb, var(--foreground) 12%, transparent) 37%, color-mix(in srgb, var(--foreground) 6%, transparent) 63%);
+  background-size: 400% 100%;
+  animation: bh-shimmer 1.4s ease infinite;
+}
+
+@keyframes bh-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Empty states */
+.bh-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+  padding: 1.75rem 1rem;
+  border: 1px dashed color-mix(in srgb, var(--brand) 28%, var(--border));
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.bh-empty::before {
+  content: "";
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  -webkit-mask: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a7563' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8h11v5a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5V8Z'/%3E%3Cpath d='M16 9h1.5a2.5 2.5 0 0 1 0 5H16'/%3E%3Cpath d='M8 3v2M11 3v2'/%3E%3C/svg%3E"),
+    linear-gradient(var(--brand-soft), var(--brand-soft));
+  background-size: 60%, 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.bh-empty-lg {
+  padding: 3rem 1rem;
+}
+
+/* Grid children default to min-width:auto, so a wide table inside a
+   `1fr` column pushed its card past the page edge. Let them shrink. */
+[class*="grid-cols-["] > *,
+[class*="lg:grid-cols-["] > *,
+[class*="md:grid-cols-["] > *,
+[class*="xl:grid-cols-["] > * {
+  min-width: 0;
+}
+
+/* Card section headings inside tabs */
+h2[class*="font-medium"],
+h3[class*="font-medium"] {
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+label[class*="text-xs"][class*="font-medium"] {
+  letter-spacing: 0.01em;
+}
+
+/* File pickers */
+input[type="file"] {
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 100%;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 0.85rem;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--border));
+  border-radius: 0.65rem;
+  background: var(--brand-soft);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
+  border-color: var(--brand);
 }
