@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { isValidMonthString } from "@/lib/salaryMonth";
 import { requireTab } from "@/lib/session";
 import {
   normalizeEntry,
@@ -45,6 +46,10 @@ export async function PATCH(
       payment_date = ${v.payment_date}, payment_method = ${v.payment_method}, note = ${v.note}
     WHERE id = ${entryId}
   `;
+
+  if (isValidMonthString(body?.salary_month)) {
+    await db`UPDATE salary_entries SET salary_month = ${body.salary_month} WHERE id = ${entryId}`;
+  }
 
   const entry = await getSalaryEntry(entryId);
   if (entry) {
