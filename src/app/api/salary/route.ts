@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
       role: r.role,
       active: r.active,
       monthly_salary: r.monthly_salary,
+      salary: hasEntry ? r.entry_salary : r.monthly_salary,
       advances_this_month: r.advances_this_month,
       status: r.entry_status,
       entry_id: r.entry_id,
