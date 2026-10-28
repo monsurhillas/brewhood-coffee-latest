@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   await ensureSalaryReady();
   const db = sql();
   const advances = await db`
-    SELECT id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
+    SELECT id, staff_id, amount::float8 AS amount, note, month, COALESCE(salary_month, month) AS salary_month, created_at, cost_id
     FROM salary_advances
     WHERE staff_id = ${staffId} AND month = ${month}
     ORDER BY created_at DESC
@@ -74,6 +74,9 @@ export async function POST(request: NextRequest) {
   let note: string | null = body?.note ?? null;
   let createdAt: string | null = null;
   let month = isValidMonthString(body?.month) ? body.month : currentMonthInDhaka();
+  // Month the advance is against (the settlement month above is the cycle it is
+  // netted in) — optional, defaults to the settlement month.
+  const salaryMonth: string | null = isValidMonthString(body?.salary_month) ? body.salary_month : null;
 
   if (costId !== null) {
     const [cost] = (await db`
@@ -139,6 +142,7 @@ export async function POST(request: NextRequest) {
     staffId,
     staffName: member.name,
     month,
+    salaryMonth,
     amount,
     createdAt: costId !== null ? createdAt : advanceTs,
     method,
