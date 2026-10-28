@@ -54,7 +54,7 @@ const PIE_COLORS = ["#d79a5e", "#6f4518", "#3b82f6", "#ef4444", "#10b981", "#8b5
 
 export default function AnalyticsTab() {
   const [data, setData] = useState<Analytics | null>(null);
-  const [view, setView] = useState<"overview" | "coffee">("overview");
+  const [view, setView] = useState<"overview" | "coffee" | "collection">("overview");
 
   useEffect(() => {
     fetch("/api/analytics")
@@ -64,12 +64,15 @@ export default function AnalyticsTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <ViewTabButton active={view === "overview"} onClick={() => setView("overview")}>
           Overview
         </ViewTabButton>
         <ViewTabButton active={view === "coffee"} onClick={() => setView("coffee")}>
           Daily Coffee Sales
+        </ViewTabButton>
+        <ViewTabButton active={view === "collection"} onClick={() => setView("collection")}>
+          Daily Collection
         </ViewTabButton>
       </div>
 
@@ -79,8 +82,10 @@ export default function AnalyticsTab() {
         ) : (
           <p className="bh-empty bh-empty-lg">Loading analytics…</p>
         )
-      ) : (
+      ) : view === "coffee" ? (
         <CoffeeDailyView />
+      ) : (
+        <CollectionDailyView />
       )}
     </div>
   );
@@ -510,6 +515,145 @@ function CoffeeDailyView() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+type CollectionDaily = {
+  month: string;
+  methods: string[];
+  days: { day: string; amounts: Record<string, number>; total: number; entries: number }[];
+  totals: { byMethod: Record<string, number>; total: number; entries: number };
+};
+
+const METHOD_LABEL: Record<string, string> = { cash: "Cash", bkash: "bKash", bank: "Bank", other: "Other" };
+const METHOD_DOT: Record<string, string> = {
+  cash: "bg-emerald-500",
+  bkash: "bg-pink-500",
+  bank: "bg-sky-500",
+  other: "bg-amber-400",
+};
+
+// Day-by-day money collected, split by how it was paid. No customer or
+// product breakdown on purpose: collections are applied first-in-first-out
+// and customers often pay ahead, so a collection doesn't belong to any one
+// item — payment method is the one meaningful split. Contra (reversal)
+// entries are netted out of the day they were logged, matching the totals
+// everywhere else in the app.
+function CollectionDailyView() {
+  const [month, setMonth] = useState(currentMonthInDhaka());
+  const [data, setData] = useState<CollectionDaily | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/analytics/collection-daily?month=${month}`)
+      .then((res) => res.json())
+      .then(setData);
+  }, [month]);
+
+  const hasActivity = data ? data.totals.entries > 0 : false;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {data && hasActivity && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {data.methods.map((m) => {
+            const value = data.totals.byMethod[m] ?? 0;
+            const share = data.totals.total > 0 ? Math.round((value / data.totals.total) * 100) : 0;
+            return (
+              <div key={m} className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${METHOD_DOT[m] ?? "bg-amber-400"}`} />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
+                    {METHOD_LABEL[m] ?? m}
+                  </p>
+                </div>
+                <p className="mt-2 truncate text-xl font-semibold tracking-tight">{formatMoney(value)}</p>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">{share}% of month</p>
+              </div>
+            );
+          })}
+          <div className="order-first col-span-2 rounded-2xl border border-transparent bg-[image:var(--brand-grad)] p-4 text-white shadow-md sm:order-last sm:col-span-1">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-white/80" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/80">Total collected</p>
+            </div>
+            <p className="mt-2 truncate text-xl font-semibold tracking-tight">{formatMoney(data.totals.total)}</p>
+            <p className="mt-0.5 text-xs text-white/75">
+              {data.totals.entries} {data.totals.entries === 1 ? "entry" : "entries"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-medium">Daily Collection</h2>
+            <p className="text-xs text-[var(--muted)]">
+              {data ? monthLabel(data.month) : ""} · by payment method, reversals netted out
+            </p>
+          </div>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="rounded-lg border border-[var(--border)] bg-transparent px-3 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+          />
+        </div>
+
+        {!data ? (
+          <p className="bh-empty bh-empty-lg">Loading…</p>
+        ) : !hasActivity ? (
+          <p className="bh-empty bh-empty-lg">No collections this month.</p>
+        ) : (
+          <div className="scroll-fade-x overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
+                  <th className="pb-2">Day</th>
+                  {data.methods.map((m) => (
+                    <th key={m} className="pb-2 text-right">
+                      {METHOD_LABEL[m] ?? m}
+                    </th>
+                  ))}
+                  <th className="pb-2 text-right font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.days.map((d) => (
+                  <tr
+                    key={d.day}
+                    className={`border-b border-[var(--border)] last:border-0 ${
+                      d.entries === 0 ? "text-[var(--muted)]" : ""
+                    }`}
+                  >
+                    <td className="py-1.5">{formatDay(d.day)}</td>
+                    {data.methods.map((m) => (
+                      <td key={m} className="py-1.5 text-right">
+                        {d.amounts[m] ? formatMoney(d.amounts[m]) : "—"}
+                      </td>
+                    ))}
+                    <td className="py-1.5 text-right font-medium text-[var(--foreground)]">
+                      {d.entries === 0 ? "—" : formatMoney(d.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--border)] font-semibold">
+                  <td className="pt-2">Total</td>
+                  {data.methods.map((m) => (
+                    <td key={m} className="pt-2 text-right">
+                      {formatMoney(data.totals.byMethod[m] ?? 0)}
+                    </td>
+                  ))}
+                  <td className="pt-2 text-right">{formatMoney(data.totals.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
