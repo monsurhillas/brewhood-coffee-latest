@@ -24,7 +24,8 @@ export type SalaryEntryRow = {
   id: number;
   staff_id: number;
   staff_name: string;
-  month: string;
+  month: string; // settlement month — the cycle advances + salary are netted in
+  salary_month: string; // the month's work the money is for (defaults to month)
   salary_amount: number;
   advance_amount: number;
   amount_paid: number;
@@ -44,7 +45,7 @@ export type NormalizedEntry = {
   note: string | null;
 };
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Validates the user-supplied fields and derives amount_paid from the
 // status: paid = the full net (salary - advance), unpaid = nothing, partial =
@@ -103,6 +104,7 @@ export function normalizeEntry(
 
 const ENTRY_SELECT = `
   SELECT se.id, se.staff_id, s.name AS staff_name, se.month,
+         COALESCE(se.salary_month, se.month) AS salary_month,
          se.salary_amount::float8 AS salary_amount, se.advance_amount::float8 AS advance_amount,
          se.amount_paid::float8 AS amount_paid, se.status,
          to_char(se.payment_date, 'YYYY-MM-DD') AS payment_date, se.payment_method, se.note
@@ -138,7 +140,7 @@ export async function syncSalaryCosts(entry: SalaryEntryRow): Promise<void> {
 
   const posted = round2(linked.reduce((sum, r) => sum + r.amount, 0));
   const delta = round2(entry.amount_paid - posted);
-  const note = `Salary - ${entry.staff_name} (${monthLabel(entry.month)})`;
+  const note = `Salary - ${entry.staff_name} (${monthLabel(entry.salary_month || entry.month)})`;
   const ts = entry.payment_date ? dateStringToTimestamp(entry.payment_date) : null;
 
   if (delta > 0 && ts) {
@@ -191,6 +193,7 @@ export type AdvanceInput = {
   staffId: number;
   staffName: string;
   month: string; // settlement month YYYY-MM
+  salaryMonth?: string | null; // month the money is for; null = same as month
   amount: number;
   createdAt: string | null; // ISO timestamp, null = now
   method: PaymentMethod;
@@ -226,7 +229,7 @@ export async function addAdvance(input: AdvanceInput) {
     }
   }
   if (costId === null) {
-    const note = `Salary advance - ${input.staffName} (${monthLabel(input.month)})`;
+    const note = `Salary advance - ${input.staffName} (${monthLabel(input.salaryMonth || input.month)})`;
     const rows = createdAt
       ? await db`
           INSERT INTO manager_costs (category, amount, note, payment_method, created_at)
@@ -245,19 +248,19 @@ export async function addAdvance(input: AdvanceInput) {
 
   const rows = createdAt
     ? await db`
-        INSERT INTO salary_advances (staff_id, amount, note, month, created_at, cost_id, cost_auto)
-        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${createdAt}, ${costId}, ${autoPosted})
-        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
+        INSERT INTO salary_advances (staff_id, amount, note, month, salary_month, created_at, cost_id, cost_auto)
+        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${input.salaryMonth ?? null}, ${createdAt}, ${costId}, ${autoPosted})
+        RETURNING id, staff_id, amount::float8 AS amount, note, month, salary_month, created_at, cost_id
       `
     : await db`
-        INSERT INTO salary_advances (staff_id, amount, note, month, cost_id, cost_auto)
-        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${costId}, ${autoPosted})
-        RETURNING id, staff_id, amount::float8 AS amount, note, month, created_at, cost_id
+        INSERT INTO salary_advances (staff_id, amount, note, month, salary_month, cost_id, cost_auto)
+        VALUES (${input.staffId}, ${input.amount}, ${input.note}, ${input.month}, ${input.salaryMonth ?? null}, ${costId}, ${autoPosted})
+        RETURNING id, staff_id, amount::float8 AS amount, note, month, salary_month, created_at, cost_id
       `;
   return rows[0];
 }
 
-async function advancesTotal(staffId: number, month: string): Promise<number> {
+export async function advancesTotal(staffId: number, month: string): Promise<number> {
   const rows = (await sql()`
     SELECT COALESCE(SUM(amount), 0)::float8 AS total FROM salary_advances
     WHERE staff_id = ${staffId} AND month = ${month}
@@ -345,4 +348,114 @@ export async function ensureSalaryReady(): Promise<void> {
     }
   }
   _salaryReady = true;
+}
+
+// ---------------------------------------------------------------------------
+// Paying salary as its own entry
+//
+// The Salary tab's single entry form has a type: "Advance" (above) or
+// "Salary". A Salary payment settles what is left of a month's salary after
+// the advances already given:
+//
+//     remaining = salary for the month - advances logged - salary paid so far
+//
+// so a staff member can take advances through the month and then be paid the
+// rest in one entry (or in several part payments). Each payment is mirrored
+// to Manager Cost on its own date and medium by syncSalaryCosts, and the
+// month's entry flips from partial to paid once nothing is left.
+// ---------------------------------------------------------------------------
+
+export type PaySalaryInput = {
+  staffId: number;
+  month: string; // settlement month
+  salaryMonth: string | null; // month the salary is for; null = same as month
+  amount: number;
+  date: string; // YYYY-MM-DD payment date
+  method: PaymentMethod;
+  note: string | null;
+  salaryAmount: number | null; // override of the month's salary; null = configured / existing
+};
+
+export async function paySalary(
+  input: PaySalaryInput
+): Promise<{ error: string; status: number } | { entry: SalaryEntryRow; remaining: number }> {
+  const db = sql();
+
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { error: "Enter the amount you are paying.", status: 400 };
+  }
+  if (!isValidDateString(input.date)) return { error: "Choose the payment date.", status: 400 };
+  if (isFutureDateString(input.date)) return { error: "Payment date can't be in the future.", status: 400 };
+
+  const [member] = (await db`
+    SELECT id, name, monthly_salary::float8 AS monthly_salary FROM staff WHERE id = ${input.staffId}
+  `) as { id: number; name: string; monthly_salary: number | null }[];
+  if (!member) return { error: "Staff member not found.", status: 404 };
+
+  const [existing] = (await db`
+    SELECT id FROM salary_entries WHERE staff_id = ${input.staffId} AND month = ${input.month} LIMIT 1
+  `) as { id: number }[];
+  const current = existing ? await getSalaryEntry(existing.id) : null;
+
+  const salary = round2(input.salaryAmount ?? current?.salary_amount ?? member.monthly_salary ?? 0);
+  if (!(salary > 0)) {
+    return {
+      error: `Set ${member.name}'s monthly salary first (Salary Configuration), or enter the salary for this month.`,
+      status: 400,
+    };
+  }
+
+  const advances = await advancesTotal(input.staffId, input.month);
+  const net = round2(salary - advances);
+  if (net <= 0.001) {
+    return { error: `Advances already cover the whole salary (${advances}) — nothing left to pay.`, status: 400 };
+  }
+
+  const paidSoFar = current?.amount_paid ?? 0;
+  const remaining = round2(net - paidSoFar);
+  if (remaining <= 0.001) {
+    return { error: `${monthLabel(input.month)} salary is already fully paid.`, status: 400 };
+  }
+  const amount = round2(input.amount);
+  if (amount > remaining + 0.001) {
+    return {
+      error: `Only ${remaining} is left to pay (salary ${salary} - advances ${advances}${paidSoFar > 0 ? ` - already paid ${paidSoFar}` : ""}).`,
+      status: 400,
+    };
+  }
+
+  const newPaid = round2(paidSoFar + amount);
+  const status: SalaryStatus = newPaid >= net - 0.005 ? "paid" : "partial";
+
+  let entryId: number;
+  if (current) {
+    await db`
+      UPDATE salary_entries SET
+        salary_amount = ${salary}, advance_amount = ${advances}, amount_paid = ${newPaid}, status = ${status},
+        payment_date = ${input.date}, payment_method = ${input.method},
+        salary_month = ${input.salaryMonth ?? current.salary_month},
+        note = ${input.note ?? current.note}
+      WHERE id = ${current.id}
+    `;
+    entryId = current.id;
+  } else {
+    const rows = await db`
+      INSERT INTO salary_entries
+        (staff_id, month, salary_month, salary_amount, advance_amount, amount_paid, status, payment_date, payment_method, note)
+      VALUES
+        (${input.staffId}, ${input.month}, ${input.salaryMonth}, ${salary}, ${advances}, ${newPaid}, ${status},
+         ${input.date}, ${input.method}, ${input.note})
+      ON CONFLICT (staff_id, month) DO NOTHING
+      RETURNING id
+    `;
+    if (rows.length === 0) {
+      return { error: "That month's salary was just updated elsewhere — reload and try again.", status: 409 };
+    }
+    entryId = rows[0].id as number;
+  }
+
+  const entry = await getSalaryEntry(entryId);
+  if (!entry) return { error: "Salary entry not found.", status: 404 };
+  await syncSalaryCosts(entry);
+  return { entry, remaining: round2(net - newPaid) };
 }

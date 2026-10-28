@@ -217,6 +217,13 @@ export async function ensureSalaryTables(): Promise<void> {
     `);
   }
   await db.query(`CREATE INDEX IF NOT EXISTS idx_salary_entries_month ON salary_entries(month)`);
+  // Which month's work the money is for. `month` stays the settlement month —
+  // the cycle advances and the final salary are netted in (and the month the
+  // cost reports file them under); salary_month is the earned-for month, e.g.
+  // an advance given on 28 Oct against October's salary that settles in
+  // November. NULL (every row from before this existed) means "same as month".
+  await db.query(`ALTER TABLE salary_advances ADD COLUMN IF NOT EXISTS salary_month TEXT`);
+  await db.query(`ALTER TABLE salary_entries ADD COLUMN IF NOT EXISTS salary_month TEXT`);
   _salaryTablesEnsured = true;
 }
 
