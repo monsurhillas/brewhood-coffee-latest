@@ -33,6 +33,7 @@ type SalaryEntry = {
   staff_id: number;
   staff_name: string;
   month: string;
+  salary_month?: string;
   salary_amount: number;
   advance_amount: number;
   amount_paid: number;
@@ -91,7 +92,44 @@ function StatusBadge({ status, amount }: { status: SalaryStatus | null; amount?:
   );
 }
 
-type AdvanceRow = { id: number; amount: number; note: string | null; created_at: string; cost_id: number | null };
+type AdvanceRow = {
+  id: number;
+  amount: number;
+  note: string | null;
+  month: string;
+  salary_month?: string;
+  created_at: string;
+  cost_id: number | null;
+};
+
+// What the entry form needs to know about one staff member for one settlement
+// month: the salary, advances already given, salary already paid and what is
+// left to pay (the same numbers as the table below).
+type EntryInfo = {
+  salary: number | null;
+  advances: number;
+  paid: number;
+  payable: number;
+  status: SalaryStatus | null;
+};
+
+type EntryType = "advance" | "salary";
+const TYPE_OPTIONS = [
+  { value: "advance", label: "Advance" },
+  { value: "salary", label: "Salary" },
+];
+
+function prevMonth(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y, mo - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function nextMonth(m: string): string {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y, mo, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 // Three compact sections, as requested: Staff (create/manage the shop's own
 // internal employees first), Salary Configuration (set each staff member's
@@ -116,21 +154,23 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
   const [editSalaryValue, setEditSalaryValue] = useState("");
   const [salarySaving, setSalarySaving] = useState(false);
 
-  const [advanceOpenId, setAdvanceOpenId] = useState<number | null>(null);
-  const [advanceAmount, setAdvanceAmount] = useState("");
-  const [advanceDate, setAdvanceDate] = useState(todayInDhaka());
-  const [advanceMethod, setAdvanceMethod] = useState("cash");
-  const [advanceSaving, setAdvanceSaving] = useState(false);
-  const [advanceError, setAdvanceError] = useState<string | null>(null);
-
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [advanceDetails, setAdvanceDetails] = useState<AdvanceRow[]>([]);
 
   // Salary entry form (create, or edit when editingEntryId is set).
   const formRef = useRef<HTMLFormElement>(null);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [formType, setFormType] = useState<EntryType>("advance");
   const [formStaffId, setFormStaffId] = useState("");
-  const [formMonth, setFormMonth] = useState(currentMonthInDhaka());
+  // Settlement month = the month the advances and the final salary are netted
+  // in (what the table and reports below are filed under); salary month = the
+  // month's work the money is for. E.g. advances for October's salary, settled
+  // in November.
+  const [formMonth, setFormMonth] = useState(nextMonth(currentMonthInDhaka()));
+  const [formSalaryMonth, setFormSalaryMonth] = useState(currentMonthInDhaka());
+  const [formAmount, setFormAmount] = useState("");
+  const [formInfo, setFormInfo] = useState<EntryInfo | null>(null);
+  const [infoTick, setInfoTick] = useState(0);
   const [formSalary, setFormSalary] = useState("");
   const [formAdvance, setFormAdvance] = useState("");
   const [formStatus, setFormStatus] = useState<SalaryStatus>("paid");
@@ -184,9 +224,10 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     loadHistory();
   }, []);
 
-  // New entry: picking a staff member / settlement month prefills the salary
-  // (their configured monthly salary) and the advance already logged for that
-  // month. Editing an existing entry keeps its own saved figures instead.
+  // New entry: picking a staff member / settlement month loads what is
+  // already given and what is left to pay. For a Salary entry the amount
+  // defaults to that remainder. Editing an existing entry keeps its own
+  // saved figures instead.
   useEffect(() => {
     if (editingEntryId !== null || !formStaffId) return;
     let cancelled = false;
@@ -194,23 +235,30 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const st = (data.staff as SalaryStaff[] | undefined)?.find((x) => String(x.id) === formStaffId);
+        const st = (data.staff as (SalaryStaff & { salary: number | null })[] | undefined)?.find(
+          (x) => String(x.id) === formStaffId
+        );
         if (!st) return;
-        setFormSalary(st.monthly_salary ? String(st.monthly_salary) : "");
-        setFormAdvance(st.advances_this_month ? String(st.advances_this_month) : "");
+        setFormInfo({
+          salary: st.salary,
+          advances: st.advances_this_month,
+          paid: st.paid_amount ?? 0,
+          payable: Math.max(0, st.payable),
+          status: st.status,
+        });
+        if (formType === "salary") setFormAmount(st.payable > 0 ? String(st.payable) : "");
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [formStaffId, formMonth, editingEntryId]);
+  }, [formStaffId, formMonth, formType, editingEntryId, infoTick]);
 
   // Switching months should drop any open advance-detail panel — it's
   // scoped to the month that was showing when it was opened.
   function handleMonthChange(next: string) {
     setMonth(next);
     setExpandedId(null);
-    setAdvanceOpenId(null);
   }
 
   async function handleAddStaff(e: React.FormEvent) {
@@ -268,39 +316,6 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
-  async function submitAdvance(s: SalaryStaff) {
-    const amount = Number(advanceAmount);
-    if (!advanceAmount || Number.isNaN(amount) || amount <= 0) {
-      setAdvanceError("Enter a valid amount.");
-      return;
-    }
-    setAdvanceSaving(true);
-    setAdvanceError(null);
-    const res = await fetch("/api/salary/advances", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        staff_id: s.id,
-        amount,
-        month,
-        date: advanceDate,
-        payment_method: advanceMethod,
-      }),
-    });
-    setAdvanceSaving(false);
-    if (res.ok) {
-      setAdvanceOpenId(null);
-      setAdvanceAmount("");
-      setAdvanceDate(todayInDhaka());
-      load();
-      if (expandedId === s.id) loadAdvanceDetails(s.id);
-      onSaved?.();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setAdvanceError(data.error ?? "Failed to record advance.");
-    }
-  }
-
   function loadAdvanceDetails(staffId: number) {
     fetch(`/api/salary/advances?staff_id=${staffId}&month=${month}`)
       .then((res) => res.json())
@@ -326,8 +341,12 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
 
   function resetForm() {
     setEditingEntryId(null);
+    setFormType("advance");
     setFormStaffId("");
-    setFormMonth(month);
+    setFormMonth(nextMonth(currentMonthInDhaka()));
+    setFormSalaryMonth(currentMonthInDhaka());
+    setFormAmount("");
+    setFormInfo(null);
     setFormSalary("");
     setFormAdvance("");
     setFormStatus("paid");
@@ -341,11 +360,17 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
 
-  // "Record Salary" on a staff row: pre-select them for the month on screen.
-  function startRecord(st: SalaryStaff) {
+  // "+ Advance" / "Pay Salary" on a staff row: start a new entry for them in
+  // the month on screen.
+  function startNew(st: SalaryStaff, type: EntryType) {
     resetForm();
+    setFormType(type);
     setFormStaffId(String(st.id));
-    setFormMonth(month);
+    // Settlement is next month by default (advances this month, settled
+    // next); if the table is already showing a later month, use that one.
+    const settle = month > nextMonth(currentMonthInDhaka()) ? month : nextMonth(currentMonthInDhaka());
+    setFormMonth(settle);
+    setFormSalaryMonth(prevMonth(settle));
     setFormFeedback(null);
     scrollToForm();
   }
@@ -354,6 +379,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
     setEditingEntryId(entry.id);
     setFormStaffId(String(entry.staff_id));
     setFormMonth(entry.month);
+    setFormSalaryMonth(entry.salary_month || entry.month);
     setFormSalary(String(entry.salary_amount));
     setFormAdvance(entry.advance_amount ? String(entry.advance_amount) : "");
     setFormStatus(entry.status);
@@ -368,6 +394,64 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
   function editForStaff(st: SalaryStaff) {
     const entry = history?.flatMap((m) => m.entries).find((x) => x.id === st.entry_id);
     if (entry) startEdit(entry);
+  }
+
+  // New entry: an Advance or a Salary payment, both on one form. Advances pile
+  // up through the month; a Salary payment settles what is left (salary -
+  // advances - already paid) and can be made in parts.
+  async function submitNew(e: React.FormEvent) {
+    e.preventDefault();
+    if (!formStaffId) {
+      setFormFeedback({ type: "error", text: "Pick a staff member first." });
+      return;
+    }
+    const amount = Number(formAmount);
+    if (!formAmount || Number.isNaN(amount) || amount <= 0) {
+      setFormFeedback({ type: "error", text: "Enter the amount." });
+      return;
+    }
+    setFormSaving(true);
+    setFormFeedback(null);
+    const common = {
+      staff_id: Number(formStaffId),
+      amount,
+      month: formMonth,
+      salary_month: formSalaryMonth,
+      date: formDate,
+      payment_method: formMethod,
+      note: formNote.trim() || null,
+    };
+    const res = await fetch(formType === "advance" ? "/api/salary/advances" : "/api/salary/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(common),
+    });
+    setFormSaving(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormFeedback({ type: "error", text: data.error ?? "Failed to save entry." });
+      return;
+    }
+    const who = staff?.find((x) => String(x.id) === formStaffId)?.name ?? "staff";
+    const left = formType === "salary" && typeof data.remaining === "number" ? data.remaining : null;
+    setFormFeedback({
+      type: "success",
+      text:
+        formType === "advance"
+          ? `Advance of ${formatMoney(amount)} saved for ${who} and posted to Manager Cost (Salary).`
+          : left && left > 0
+            ? `Salary of ${formatMoney(amount)} paid to ${who} — ${formatMoney(left)} still left for ${monthLabel(formMonth)}.`
+            : `Salary of ${formatMoney(amount)} paid to ${who} — ${monthLabel(formMonth)} is fully settled.`,
+    });
+    // Keep the form on the same person / months / type so the next advance is
+    // quick; just clear the amount and refresh what is given so far.
+    setFormAmount("");
+    setFormNote("");
+    setMonth(formMonth);
+    setExpandedId(null);
+    setInfoTick((t) => t + 1);
+    load();
+    onSaved?.();
   }
 
   async function submitEntry(e: React.FormEvent) {
@@ -621,147 +705,265 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
         </div>
       </div>
 
-      <form
-        ref={formRef}
-        onSubmit={submitEntry}
-        className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      {editingEntryId === null && (
+        <form
+          ref={formRef}
+          onSubmit={submitNew}
+          className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
+        >
           <div>
-            <h2 className="font-medium">{editingEntryId !== null ? "Edit Salary Entry" : "Salary Entry"}</h2>
+            <h2 className="font-medium">New Entry</h2>
             <p className="text-xs text-[var(--muted)]">
-              Payments are posted to Manager Cost (Salary) on the payment date.
+              Log each advance as you give it, then pay the rest of the salary with a Salary entry. Every payment is
+              posted to Manager Cost (Salary) on its date.
             </p>
           </div>
-          {editingEntryId !== null && (
-            <button type="button" onClick={resetForm} className="text-xs text-[var(--muted)] hover:underline">
-              Cancel edit
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Staff</label>
-            {editingEntryId !== null ? (
-              <p className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
-                {staff?.find((x) => String(x.id) === formStaffId)?.name ?? "—"}
-              </p>
-            ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Type</label>
+              <ThemedSelect value={formType} onChange={(v) => setFormType(v as EntryType)} options={TYPE_OPTIONS} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Staff</label>
               <ThemedSelect
                 value={formStaffId}
                 onChange={setFormStaffId}
                 placeholder="Select staff…"
                 options={(staff ?? []).filter((x) => x.active).map((x) => ({ value: String(x.id), label: x.name }))}
               />
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Settlement month</label>
-            <input
-              type="month"
-              value={formMonth}
-              disabled={editingEntryId !== null}
-              onChange={(e) => e.target.value && setFormMonth(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Salary</label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={formSalary}
-              onChange={(e) => setFormSalary(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          <div>
-            <label
-              className="mb-1 block text-xs font-medium text-[var(--muted)]"
-              title="Counts as salary paid out — posted to Manager Cost if it isn't there yet"
-            >
-              Advance payment
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={formAdvance}
-              onChange={(e) => setFormAdvance(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Status</label>
-            <ThemedSelect
-              value={formStatus}
-              onChange={(v) => setFormStatus(v as SalaryStatus)}
-              options={STATUS_OPTIONS}
-            />
-          </div>
-          {formStatus === "partial" && (
+            </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Amount paid</label>
+              <label
+                className="mb-1 block text-xs font-medium text-[var(--muted)]"
+                title="The month this is paid out and netted in — advances and the final salary share it"
+              >
+                Settlement month
+              </label>
+              <input
+                type="month"
+                value={formMonth}
+                onChange={(e) => e.target.value && setFormMonth(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]" title="Whose month's work this money is for">
+                Salary month
+              </label>
+              <input
+                type="month"
+                value={formSalaryMonth}
+                onChange={(e) => e.target.value && setFormSalaryMonth(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">
+                {formType === "advance" ? "Advance amount" : "Salary amount paid"}
+              </label>
               <input
                 type="number"
                 step="0.01"
                 min={0}
-                value={formPaid}
-                onChange={(e) => setFormPaid(e.target.value)}
+                value={formAmount}
+                onChange={(e) => setFormAmount(e.target.value)}
                 className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
               />
             </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</label>
+              <input
+                type="date"
+                value={formDate}
+                max={todayInDhaka()}
+                onChange={(e) => setFormDate(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Paid via</label>
+              <ThemedSelect value={formMethod} onChange={setFormMethod} options={METHOD_OPTIONS} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Note (optional)</label>
+              <input value={formNote} onChange={(e) => setFormNote(e.target.value)} className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]" />
+            </div>
+          </div>
+          {formStaffId && formInfo && (
+            <p className="rounded-lg bg-black/5 px-3 py-2 text-sm dark:bg-white/5">
+              <span className="text-[var(--muted)]">{monthLabel(formMonth)}: </span>
+              {formInfo.salary !== null ? (
+                <>
+                  salary <span className="font-medium">{formatMoney(formInfo.salary)}</span>
+                </>
+              ) : (
+                <span className="text-amber-600">no monthly salary set (see Salary Configuration)</span>
+              )}
+              {" "}− advances <span className="font-medium">{formatMoney(formInfo.advances)}</span>
+              {formInfo.paid > 0 && (
+                <>
+                  {" "}− paid <span className="font-medium">{formatMoney(formInfo.paid)}</span>
+                </>
+              )}
+              {" "}= <span className="font-semibold">{formatMoney(formInfo.payable)}</span> left to pay
+            </p>
           )}
-          {formStatus !== "unpaid" && (
-            <>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button
+              type="submit"
+              disabled={formSaving}
+              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {formSaving ? "Saving…" : formType === "advance" ? "Save Advance" : "Pay Salary"}
+            </button>
+          </div>
+          <FormMessage message={formFeedback} />
+        </form>
+      )}
+
+      {editingEntryId !== null && (
+        <form
+          ref={formRef}
+          onSubmit={submitEntry}
+          className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-medium">Edit Salary Entry</h2>
+              <p className="text-xs text-[var(--muted)]">
+                Payments are posted to Manager Cost (Salary) on the payment date.
+              </p>
+            </div>
+            {editingEntryId !== null && (
+              <button type="button" onClick={resetForm} className="text-xs text-[var(--muted)] hover:underline">
+                Cancel edit
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Staff</label>
+              {editingEntryId !== null ? (
+                <p className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
+                  {staff?.find((x) => String(x.id) === formStaffId)?.name ?? "—"}
+                </p>
+              ) : (
+                <ThemedSelect
+                  value={formStaffId}
+                  onChange={setFormStaffId}
+                  placeholder="Select staff…"
+                  options={(staff ?? []).filter((x) => x.active).map((x) => ({ value: String(x.id), label: x.name }))}
+                />
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Settlement month</label>
+              <input
+                type="month"
+                value={formMonth}
+                disabled={editingEntryId !== null}
+                onChange={(e) => e.target.value && setFormMonth(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Salary</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                value={formSalary}
+                onChange={(e) => setFormSalary(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label
+                className="mb-1 block text-xs font-medium text-[var(--muted)]"
+                title="Counts as salary paid out — posted to Manager Cost if it isn't there yet"
+              >
+                Advance payment
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                value={formAdvance}
+                onChange={(e) => setFormAdvance(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Status</label>
+              <ThemedSelect
+                value={formStatus}
+                onChange={(v) => setFormStatus(v as SalaryStatus)}
+                options={STATUS_OPTIONS}
+              />
+            </div>
+            {formStatus === "partial" && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Payment date</label>
+                <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Amount paid</label>
                 <input
-                  type="date"
-                  value={formDate}
-                  max={todayInDhaka()}
-                  onChange={(e) => setFormDate(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={formPaid}
+                  onChange={(e) => setFormPaid(e.target.value)}
                   className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Paid via</label>
-                <ThemedSelect value={formMethod} onChange={setFormMethod} options={METHOD_OPTIONS} />
-              </div>
-            </>
-          )}
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Note (optional)</label>
-            <input value={formNote} onChange={(e) => setFormNote(e.target.value)} className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]" />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm">
-            <span className="text-[var(--muted)]">Net payable: </span>
-            <span className="font-medium">{formatMoney(formNet)}</span>
-            {formStatus === "partial" && Number(formPaid) > 0 && (
-              <span className="ml-2 text-xs text-[var(--muted)]">
-                · remaining {formatMoney(Math.max(0, formNet - Number(formPaid)))}
-              </span>
             )}
-          </p>
-          <button
-            type="submit"
-            disabled={formSaving}
-            className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-          >
-            {formSaving ? "Saving…" : editingEntryId !== null ? "Update Entry" : "Save Salary Entry"}
-          </button>
-        </div>
-        <FormMessage message={formFeedback} />
-      </form>
+            {formStatus !== "unpaid" && (
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Payment date</label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    max={todayInDhaka()}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Paid via</label>
+                  <ThemedSelect value={formMethod} onChange={setFormMethod} options={METHOD_OPTIONS} />
+                </div>
+              </>
+            )}
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-[var(--muted)]">Note (optional)</label>
+              <input value={formNote} onChange={(e) => setFormNote(e.target.value)} className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--brand)]" />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              <span className="text-[var(--muted)]">Net payable: </span>
+              <span className="font-medium">{formatMoney(formNet)}</span>
+              {formStatus === "partial" && Number(formPaid) > 0 && (
+                <span className="ml-2 text-xs text-[var(--muted)]">
+                  · remaining {formatMoney(Math.max(0, formNet - Number(formPaid)))}
+                </span>
+              )}
+            </p>
+            <button
+              type="submit"
+              disabled={formSaving}
+              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {formSaving ? "Saving…" : editingEntryId !== null ? "Update Entry" : "Save Salary Entry"}
+            </button>
+          </div>
+          <FormMessage message={formFeedback} />
+        </form>
+      )}
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-medium">Advances &amp; Payable</h2>
-            <p className="text-xs text-[var(--muted)]">{monthLabel(month)}</p>
+            <p className="text-xs text-[var(--muted)]">Settlement month: {monthLabel(month)}</p>
           </div>
           <input
             type="month"
@@ -808,85 +1010,34 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                       <div className="flex flex-col items-end gap-1">
                         <StatusBadge status={s.status} amount={s.paid_amount} />
                         <div className="flex items-center gap-2">
-                          {s.status !== "paid" && (
-                            <button
-                              onClick={() => setAdvanceOpenId(advanceOpenId === s.id ? null : s.id)}
-                              className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
-                            >
-                              + Advance
-                            </button>
+                          {s.status !== "paid" && s.active && (
+                            <>
+                              <button
+                                onClick={() => startNew(s, "advance")}
+                                className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
+                              >
+                                + Advance
+                              </button>
+                              <button
+                                onClick={() => startNew(s, "salary")}
+                                className="rounded-lg bg-[var(--brand)] px-2.5 py-1 text-xs font-medium text-white hover:opacity-90"
+                              >
+                                Pay Salary
+                              </button>
+                            </>
                           )}
-                          {s.entry_id ? (
+                          {s.entry_id && (
                             <button
                               onClick={() => editForStaff(s)}
                               className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
                             >
                               Edit
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => startRecord(s)}
-                              disabled={!s.active}
-                              className="rounded-lg bg-[var(--brand)] px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
-                            >
-                              Record Salary
-                            </button>
                           )}
                         </div>
                       </div>
                     </td>
                   </tr>
-
-                  {advanceOpenId === s.id && (
-                    <tr className="border-b border-[var(--border)] last:border-0 bg-black/5 dark:bg-white/5">
-                      <td colSpan={5} className="px-2 py-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            autoFocus
-                            placeholder="Advance amount"
-                            value={advanceAmount}
-                            onChange={(ev) => setAdvanceAmount(ev.target.value)}
-                            onKeyDown={(ev) => ev.key === "Enter" && submitAdvance(s)}
-                            className="w-36 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm outline-none focus:border-[var(--brand)]"
-                          />
-                          <input
-                            type="date"
-                            value={advanceDate}
-                            max={todayInDhaka()}
-                            onChange={(ev) => setAdvanceDate(ev.target.value)}
-                            title="Date the advance was given"
-                            className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm outline-none focus:border-[var(--brand)]"
-                          />
-                          <div className="w-28">
-                            <ThemedSelect value={advanceMethod} onChange={setAdvanceMethod} options={METHOD_OPTIONS} />
-                          </div>
-                          <button
-                            onClick={() => submitAdvance(s)}
-                            disabled={advanceSaving}
-                            className="rounded-lg bg-[var(--brand)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
-                          >
-                            {advanceSaving ? "Saving…" : "Record Advance"}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setAdvanceOpenId(null);
-                              setAdvanceError(null);
-                            }}
-                            className="text-xs text-[var(--muted)] hover:underline"
-                          >
-                            Cancel
-                          </button>
-                          <p className="w-full text-xs text-[var(--muted)]">
-                            Also posted to Manager Cost (Salary) on that date.
-                          </p>
-                          {advanceError && <p className="text-xs text-red-500">{advanceError}</p>}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
 
                   {expandedId === s.id && (
                     <tr className="border-b border-[var(--border)] last:border-0">
@@ -899,6 +1050,7 @@ export default function SalaryTab({ onSaved }: { onSaved?: () => void }) {
                               <li key={a.id} className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
                                 <span>
                                   {formatDate(a.created_at)} {a.note ? `— ${a.note}` : ""}
+                                  {a.salary_month && a.salary_month !== a.month ? ` · for ${monthLabel(a.salary_month)}` : ""}
                                   {a.cost_id ? " · from Manager Cost" : ""}
                                 </span>
                                 <span className="flex items-center gap-2">
