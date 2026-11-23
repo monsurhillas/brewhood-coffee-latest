@@ -9,6 +9,7 @@ const PROTECTED_API_PREFIXES = [
   "/api/sales",
   "/api/collections",
   "/api/costs",
+  "/api/entry-edits",
   "/api/analytics",
   "/api/reports",
   "/api/admin",
