@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
+import { inWindowSql, withEdits } from "@/lib/entryEdits";
 
 export const dynamic = "force-dynamic";
 
@@ -9,15 +10,19 @@ export async function GET() {
   const { response } = await requireTab("sale");
   if (response) return response;
   const db = sql();
-  const rows = await db`
-    SELECT sa.id, sa.quantity, sa.unit_price::float8, sa.total::float8, sa.sku_name,
-           sa.note, sa.created_at, e.name AS employee_name, e.employee_id
+  // Manager-only list. Each row says whether it can still be edited (dated in
+  // the last 30 days) and carries its edit history for the "Edited" badge.
+  const rows = (await db.query(`
+    SELECT sa.id, sa.sku_id, sa.quantity, sa.unit_price::float8, sa.total::float8, sa.sku_name,
+           sa.note, sa.created_at, e.name AS employee_name, e.employee_id,
+           to_char(sa.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') AS entry_date,
+           ${inWindowSql("sa.created_at")} AS editable
     FROM sales sa
     JOIN employees e ON e.id = sa.employee_id
-    ORDER BY sa.created_at DESC
-    LIMIT 50
-  `;
-  return NextResponse.json({ sales: rows });
+    ORDER BY sa.created_at DESC, sa.id DESC
+    LIMIT 300
+  `)) as { id: number }[];
+  return NextResponse.json({ sales: await withEdits("sale", rows) });
 }
 
 export async function POST(request: NextRequest) {
