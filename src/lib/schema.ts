@@ -168,4 +168,15 @@ export const SCHEMA_STATEMENTS = [
   `ALTER TABLE salary_entries ADD COLUMN IF NOT EXISTS salary_month TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_month ON salary_advances(staff_id, month)`,
   `CREATE INDEX IF NOT EXISTS idx_salary_payments_staff_month ON salary_payments(staff_id, month)`,
+  // Edit history for corrected sales / collections / manager costs — see lib/entryEdits.ts.
+  `CREATE TABLE IF NOT EXISTS entry_edits (
+    id SERIAL PRIMARY KEY,
+    entry_type TEXT NOT NULL,
+    entry_id INTEGER NOT NULL,
+    edited_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    edited_by TEXT,
+    remarks TEXT NOT NULL,
+    changes JSONB NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_entry_edits_entry ON entry_edits(entry_type, entry_id)`,
 ];
