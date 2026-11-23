@@ -3,6 +3,7 @@ import { sql, isPaymentMethod } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { ensureCollectionTrxColumn, normalizeTrxId } from "@/lib/collectionTrx";
 import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
+import { inWindowSql, withEdits } from "@/lib/entryEdits";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +12,17 @@ export async function GET() {
   if (response) return response;
   await ensureCollectionTrxColumn();
   const db = sql();
-  const rows = await db`
+  const rows = (await db.query(`
     SELECT c.id, c.amount::float8, c.method, c.is_contra, c.trx_id, c.note, c.created_at,
-           e.name AS employee_name, e.employee_id
+           e.name AS employee_name, e.employee_id,
+           to_char(c.created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') AS entry_date,
+           ${inWindowSql("c.created_at")} AS editable
     FROM collections c
     JOIN employees e ON e.id = c.employee_id
-    ORDER BY c.created_at DESC
-    LIMIT 50
-  `;
-  return NextResponse.json({ collections: rows });
+    ORDER BY c.created_at DESC, c.id DESC
+    LIMIT 300
+  `)) as { id: number }[];
+  return NextResponse.json({ collections: await withEdits("collection", rows) });
 }
 
 // Handles both regular Collection Entry and Contra Entry (correction) —
