@@ -3,6 +3,7 @@ import { sql, ensureCostColumns, isPaymentMethod } from "@/lib/db";
 import { requireTab } from "@/lib/session";
 import { ensureSalaryReady } from "@/lib/salaryEntries";
 import { isValidDateString, isFutureDateString, dateStringToTimestamp } from "@/lib/entryDate";
+import { inWindowSql, withEdits } from "@/lib/entryEdits";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,17 @@ export async function GET() {
   await ensureCostColumns();
   await ensureSalaryReady(); // posts any earlier unposted salary advances once
   const db = sql();
-  const rows = await db`
-    SELECT id, category, amount::float8, note, payment_method, salary_entry_id, created_at
+  // salary_linked rows are posted by the Salary tab and are changed there, not here.
+  const rows = (await db.query(`
+    SELECT id, category, amount::float8, note, payment_method, salary_entry_id, created_at,
+           to_char(created_at AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') AS entry_date,
+           (salary_entry_id IS NOT NULL OR EXISTS (SELECT 1 FROM salary_advances a WHERE a.cost_id = manager_costs.id)) AS salary_linked,
+           ${inWindowSql("created_at")} AS editable
     FROM manager_costs
     ORDER BY created_at DESC, id DESC
-    LIMIT 50
-  `;
-  return NextResponse.json({ costs: rows });
+    LIMIT 300
+  `)) as { id: number }[];
+  return NextResponse.json({ costs: await withEdits("cost", rows) });
 }
 
 export async function POST(request: NextRequest) {
