@@ -7,6 +7,9 @@ import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
 import EntryDateBar from "@/components/dashboard/EntryDateBar";
 import { useEntryDate } from "@/lib/useEntryDate";
 import { formatMoney, formatDate } from "@/lib/format";
+import EntryEditControls from "@/components/dashboard/EntryEditControls";
+import EditEntryDialog, { type EditTarget } from "@/components/dashboard/EditEntryDialog";
+import type { EditRecord } from "@/lib/entryEdits";
 
 type CollectionRow = {
   id: number;
@@ -18,6 +21,9 @@ type CollectionRow = {
   trx_id: string | null;
   note: string | null;
   created_at: string;
+  entry_date: string;
+  editable: boolean;
+  edits: EditRecord[];
 };
 
 const METHODS = ["cash", "bkash", "bank"];
@@ -32,6 +38,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<CollectionRow[]>([]);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
   const entryDate = useEntryDate();
 
   useEffect(() => {
@@ -163,15 +170,13 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-medium">Recent Collections</h2>
-          <p className="text-xs text-[var(--muted)]">
-            Entries are permanent — use a contra entry to correct a mistake.
-          </p>
+          <p className="text-xs text-[var(--muted)]">Entries from the last 30 days can be edited — remarks required, and every edit is kept in its history.</p>
         </div>
         {recent.length === 0 ? (
           <p className="bh-empty">No collections yet.</p>
         ) : (
           <>
-            <ul className="flex flex-col gap-2 sm:hidden">
+            <ul className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto sm:hidden">
               {recent.map((r) => (
                 <li
                   key={r.id}
@@ -188,11 +193,16 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                     {r.trx_id && <p className="truncate font-mono normal-case">Trx ID: {r.trx_id}</p>}
                     <p>{formatDate(r.created_at)}</p>
                   </div>
+                  {(r.editable || r.edits.length > 0) && (
+                    <div className="mt-2 flex justify-end">
+                      <EntryEditControls editable={r.editable} edits={r.edits} onEdit={() => setEditing({ type: "collection", row: r })} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
-            <div className="scroll-fade-x hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[600px] text-sm">
+            <div className="scroll-fade-x hidden max-h-[70vh] overflow-auto sm:block">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
                     <th className="pb-2">Employee</th>
@@ -201,6 +211,7 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                     <th className="pb-2">Trx ID</th>
                     <th className="pb-2 text-right">Amount</th>
                     <th className="pb-2 text-right">When</th>
+                    <th className="pb-2 pl-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,6 +223,9 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
                       <td className="py-2 font-mono text-xs">{r.trx_id || <span className="text-[var(--muted)]">—</span>}</td>
                       <td className="py-2 text-right">{formatMoney(r.amount)}</td>
                       <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
+                      <td className="py-2 pl-3 text-right">
+                        <EntryEditControls editable={r.editable} edits={r.edits} onEdit={() => setEditing({ type: "collection", row: r })} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -220,6 +234,18 @@ export default function CollectionEntryTab({ onSaved }: { onSaved: () => void })
           </>
         )}
       </div>
+
+      {editing && (
+        <EditEntryDialog
+          key={`${editing.type}-${editing.row.id}`}
+          target={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            loadRecent();
+            onSaved();
+          }}
+        />
+      )}
     </div>
   );
 }

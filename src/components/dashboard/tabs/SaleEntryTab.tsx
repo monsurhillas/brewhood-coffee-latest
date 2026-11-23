@@ -7,17 +7,24 @@ import FormMessage, { FormFeedback } from "@/components/dashboard/FormMessage";
 import EntryDateBar from "@/components/dashboard/EntryDateBar";
 import { useEntryDate } from "@/lib/useEntryDate";
 import { formatMoney, formatDate } from "@/lib/format";
+import EntryEditControls from "@/components/dashboard/EntryEditControls";
+import EditEntryDialog, { type EditTarget } from "@/components/dashboard/EditEntryDialog";
+import type { EditRecord } from "@/lib/entryEdits";
 
 type Sku = { id: number; name: string; price: string; active: boolean };
 type SaleRow = {
   id: number;
   employee_name: string;
   employee_id: string;
+  sku_id: number | null;
   sku_name: string;
   quantity: number;
   unit_price: number;
   total: number;
   created_at: string;
+  entry_date: string;
+  editable: boolean;
+  edits: EditRecord[];
 };
 
 export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
@@ -30,6 +37,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<FormFeedback>(null);
   const [recent, setRecent] = useState<SaleRow[]>([]);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
   const entryDate = useEntryDate();
 
   useEffect(() => {
@@ -181,7 +189,10 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
       </form>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-        <h2 className="mb-3 font-medium">Recent Sales</h2>
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-medium">Recent Sales</h2>
+          <p className="text-xs text-[var(--muted)]">Entries from the last 30 days can be edited — remarks required, and every edit is kept in its history.</p>
+        </div>
         {recent.length === 0 ? (
           <p className="bh-empty">No sales yet.</p>
         ) : (
@@ -190,7 +201,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
                 on a phone that reads as "the box is cut off". A stacked card
                 per row needs no horizontal scroll, so it replaces the table
                 entirely on narrow screens; the table returns at sm and up. */}
-            <ul className="flex flex-col gap-2 sm:hidden">
+            <ul className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto sm:hidden">
               {recent.map((r) => (
                 <li
                   key={r.id}
@@ -206,11 +217,16 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
                     </p>
                     <p>{formatDate(r.created_at)}</p>
                   </div>
+                  {(r.editable || r.edits.length > 0) && (
+                    <div className="mt-2 flex justify-end">
+                      <EntryEditControls editable={r.editable} edits={r.edits} onEdit={() => setEditing({ type: "sale", row: r })} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
-            <div className="scroll-fade-x hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[480px] text-sm">
+            <div className="scroll-fade-x hidden max-h-[70vh] overflow-auto sm:block">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--muted)]">
                     <th className="pb-2">Employee</th>
@@ -218,6 +234,7 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
                     <th className="pb-2">Qty</th>
                     <th className="pb-2 text-right">Total</th>
                     <th className="pb-2 text-right">When</th>
+                    <th className="pb-2 pl-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -228,6 +245,9 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
                       <td className="py-2">{r.quantity}</td>
                       <td className="py-2 text-right">{formatMoney(r.total)}</td>
                       <td className="py-2 text-right text-xs text-[var(--muted)]">{formatDate(r.created_at)}</td>
+                      <td className="py-2 pl-3 text-right">
+                        <EntryEditControls editable={r.editable} edits={r.edits} onEdit={() => setEditing({ type: "sale", row: r })} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -236,6 +256,19 @@ export default function SaleEntryTab({ onSaved }: { onSaved: () => void }) {
           </>
         )}
       </div>
+
+      {editing && (
+        <EditEntryDialog
+          key={`${editing.type}-${editing.row.id}`}
+          target={editing}
+          skus={skus}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            loadRecent();
+            onSaved();
+          }}
+        />
+      )}
     </div>
   );
 }
